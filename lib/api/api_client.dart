@@ -11,6 +11,7 @@ import 'package:oasx/api/config_transfer_models.dart';
 import 'package:oasx/config/constants.dart';
 import 'package:oasx/modules/common/models/storage_key.dart';
 import 'package:oasx/modules/home/models/script_statistics_models.dart';
+import 'package:oasx/modules/click_statistics/models/click_statistics_models.dart';
 import 'package:oasx/modules/log/log_browser_models.dart';
 import 'package:oasx/translation/i18n.dart';
 import 'package:oasx/translation/i18n_content.dart';
@@ -27,6 +28,7 @@ part 'api_client_script.dart';
 part 'api_client_feedback.dart';
 part 'api_client_statistics.dart';
 part 'api_client_logs.dart';
+part 'api_client_click_statistics.dart';
 
 class ApiResult<T> {
   ApiResult({this.data, this.error, this.code});

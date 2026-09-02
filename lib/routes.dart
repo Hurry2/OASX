@@ -7,6 +7,7 @@ import 'package:oasx/modules/home/index.dart';
 import 'package:oasx/modules/server/index.dart';
 import 'package:oasx/modules/settings/index.dart';
 import 'package:oasx/utils/platform_utils.dart';
+import 'package:oasx/modules/click_statistics/index.dart';
 
 class Routes {
   static const initial = '/home';
@@ -28,6 +29,11 @@ class Routes {
       binding: BindingsBuilder(() {
         Get.put<ServerController>(ServerController());
       }),
+    ),
+    GetPage(
+      name: '/click-statistics',
+      page: () => const ClickStatisticsView(),
+      binding: ClickStatisticsBinding(),
     ),
   ];
 

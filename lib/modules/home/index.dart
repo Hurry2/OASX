@@ -93,6 +93,11 @@ class _HomeViewState extends State<HomeView> {
         trailingActions: PlatformUtils.usesDesktopLayout
             ? [
                 IconButton(
+                  tooltip: '点击统计',
+                  onPressed: () => Get.toNamed('/click-statistics'),
+                  icon: const Icon(Icons.touch_app_rounded),
+                ),
+                IconButton(
                   tooltip: I18n.setting.tr,
                   onPressed: () => Get.toNamed('/settings'),
                   icon: const Icon(Icons.settings_rounded),
