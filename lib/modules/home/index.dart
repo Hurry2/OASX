@@ -52,7 +52,7 @@ class _HomeViewState extends State<HomeView> {
     super.initState();
     if (!PlatformUtils.isWeb) {
       Future.delayed(const Duration(milliseconds: 300), () {
-        checkUpdate();
+        // checkUpdate();
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
