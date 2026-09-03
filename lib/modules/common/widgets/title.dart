@@ -9,6 +9,7 @@ Widget getTitle(BuildContext context, {String? routePath}) {
   return switch (resolvedRoutePath) {
     '/settings' => const SettingTitle(),
     '/server' => const ServerTitle(),
+    '/click-statistics' => const ClickStatisticsTitle(),
     _ => const HomeTitleBar(),
   };
 }
@@ -118,6 +119,43 @@ class ServerTitle extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class ClickStatisticsTitle extends StatelessWidget {
+  const ClickStatisticsTitle({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final backButton = switch (Theme.of(context).platform) {
+      TargetPlatform.android => false,
+      TargetPlatform.iOS => false,
+      _ => true,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 5),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (backButton) ...[
+            BackButton(onPressed: _backHome),
+            const SizedBox(width: 8),
+          ],
+          Image.asset('assets/images/Icon-app.png', height: 30, width: 30),
+          const SizedBox(width: 14),
+          const Flexible(child: _TitleLabel(text: 'OASX / 点击统计')),
+        ],
+      ),
+    );
+  }
+
+  void _backHome() {
+    if (Get.key.currentState?.canPop() ?? false) {
+      Get.back();
+    } else {
+      Get.offAllNamed('/home');
+    }
   }
 }
 

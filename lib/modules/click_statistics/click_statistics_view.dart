@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:oasx/modules/click_statistics/click_statistics_controller.dart';
 import 'package:oasx/modules/click_statistics/models/click_statistics_models.dart';
+import 'package:oasx/modules/common/widgets/appbar.dart';
 
 class ClickStatisticsView extends GetView<ClickStatisticsController> {
   const ClickStatisticsView({super.key});
@@ -13,9 +14,10 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('点击统计'),
-        actions: [
+      appBar: buildPlatformAppBar(
+        context,
+        routePath: '/click-statistics',
+        trailingActions: [
           IconButton(
             tooltip: '刷新',
             onPressed: controller.refresh,
@@ -463,7 +465,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           // ----------------------------------------------------------------
           // 标题
           // ----------------------------------------------------------------
-
           Row(
             children: [
               Text('点击热力图', style: Theme.of(context).textTheme.titleMedium),
