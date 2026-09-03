@@ -63,6 +63,18 @@ class ClickStatisticsController extends GetxController {
 
   Timer? _timelineTimer;
 
+  // ---------------------------------------------------------------------------
+  // 实例下任务 / 日期缓存
+  // ---------------------------------------------------------------------------
+
+  /// 当前实例下所有任务对应的日期。
+  ///
+  /// 只用于在现有 API 的基础上实现：
+  /// 实例 -> 日期 -> 任务
+  ///
+  /// 不修改后端，也不新增 API。
+  final Map<String, Set<String>> _taskDates = {};
+
   @override
   void onInit() {
     super.onInit();
@@ -177,7 +189,9 @@ class ClickStatisticsController extends GetxController {
         selectedConfig.value = configs.first;
       }
 
-      await loadTasks();
+      // 新顺序：
+      // 实例 -> 日期 -> 任务 -> 运行记录
+      await loadDates();
     } catch (e) {
       errorMessage.value = e.toString();
 
@@ -192,11 +206,111 @@ class ClickStatisticsController extends GetxController {
       return;
     }
 
-    if (selectedConfig.value == value && tasks.isNotEmpty) {
+    if (selectedConfig.value == value && dates.isNotEmpty) {
       return;
     }
 
     selectedConfig.value = value;
+
+    await loadDates();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Date
+  // ---------------------------------------------------------------------------
+
+  /// 获取当前实例下所有任务的日期并合并。
+  ///
+  /// 使用已有：
+  ///   getClickStatisticsTasks(config)
+  ///   getClickStatisticsDates(config, task)
+  ///
+  /// 不新增 API。
+  Future<void> loadDates() async {
+    final config = selectedConfig.value;
+
+    if (config == null || config.isEmpty) {
+      _clearFromConfig();
+      return;
+    }
+
+    isLoadingDates.value = true;
+    errorMessage.value = '';
+
+    dates.clear();
+    tasks.clear();
+    sessions.clear();
+
+    selectedDate.value = null;
+    selectedTask.value = null;
+    selectedSession.value = null;
+
+    detail.value = null;
+
+    resetTimeline();
+
+    _taskDates.clear();
+
+    try {
+      final taskResult = await api.getClickStatisticsTasks(config);
+
+      if (taskResult.tasks.isEmpty) {
+        return;
+      }
+
+      // 并行获取每个任务的日期。
+      final results = await Future.wait(
+        taskResult.tasks.map((task) async {
+          try {
+            final result = await api.getClickStatisticsDates(config, task);
+
+            return MapEntry(task, result.dates.toSet());
+          } catch (_) {
+            return MapEntry(task, <String>{});
+          }
+        }),
+      );
+
+      final allDates = <String>{};
+
+      for (final entry in results) {
+        if (entry.value.isEmpty) {
+          continue;
+        }
+
+        _taskDates[entry.key] = entry.value;
+        allDates.addAll(entry.value);
+      }
+
+      final sortedDates = allDates.toList()..sort((a, b) => b.compareTo(a));
+
+      dates.assignAll(sortedDates);
+
+      if (dates.isEmpty) {
+        return;
+      }
+
+      // 默认选择最新日期。
+      selectedDate.value = dates.first;
+
+      await loadTasks();
+    } catch (e) {
+      errorMessage.value = e.toString();
+    } finally {
+      isLoadingDates.value = false;
+    }
+  }
+
+  Future<void> selectDate(String? value) async {
+    if (value == null || value.isEmpty) {
+      return;
+    }
+
+    if (selectedDate.value == value && tasks.isNotEmpty) {
+      return;
+    }
+
+    selectedDate.value = value;
 
     await loadTasks();
   }
@@ -205,11 +319,13 @@ class ClickStatisticsController extends GetxController {
   // Task
   // ---------------------------------------------------------------------------
 
+  /// 根据当前选中的日期，从当前实例的任务中筛选出实际存在于该日期的任务。
   Future<void> loadTasks() async {
     final config = selectedConfig.value;
+    final date = selectedDate.value;
 
-    if (config == null || config.isEmpty) {
-      _clearFromConfig();
+    if (config == null || config.isEmpty || date == null || date.isEmpty) {
+      _clearFromDate();
       return;
     }
 
@@ -217,20 +333,33 @@ class ClickStatisticsController extends GetxController {
     errorMessage.value = '';
 
     tasks.clear();
-    _clearFromTask();
+    sessions.clear();
+
+    selectedTask.value = null;
+    selectedSession.value = null;
+
+    detail.value = null;
+
+    resetTimeline();
 
     try {
-      final result = await api.getClickStatisticsTasks(config);
+      final availableTasks =
+          _taskDates.entries
+              .where((entry) => entry.value.contains(date))
+              .map((entry) => entry.key)
+              .toList()
+            ..sort();
 
-      tasks.assignAll(result.tasks);
+      tasks.assignAll(availableTasks);
 
       if (tasks.isEmpty) {
         return;
       }
 
+      // 默认选择第一个任务。
       selectedTask.value = tasks.first;
 
-      await loadDates();
+      await loadSessions();
     } catch (e) {
       errorMessage.value = e.toString();
     } finally {
@@ -245,59 +374,6 @@ class ClickStatisticsController extends GetxController {
 
     selectedTask.value = value;
 
-    await loadDates();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Date
-  // ---------------------------------------------------------------------------
-
-  Future<void> loadDates() async {
-    final config = selectedConfig.value;
-
-    final task = selectedTask.value;
-
-    if (config == null || config.isEmpty || task == null || task.isEmpty) {
-      _clearFromTask();
-      return;
-    }
-
-    isLoadingDates.value = true;
-    errorMessage.value = '';
-
-    dates.clear();
-    _clearFromDate();
-
-    try {
-      final result = await api.getClickStatisticsDates(config, task);
-
-      dates.assignAll(result.dates);
-
-      if (dates.isEmpty) {
-        return;
-      }
-
-      selectedDate.value = dates.first;
-
-      await loadSessions();
-    } catch (e) {
-      errorMessage.value = e.toString();
-    } finally {
-      isLoadingDates.value = false;
-    }
-  }
-
-  Future<void> selectDate(String? value) async {
-    if (value == null || value.isEmpty) {
-      return;
-    }
-
-    if (selectedDate.value == value && sessions.isNotEmpty) {
-      return;
-    }
-
-    selectedDate.value = value;
-
     await loadSessions();
   }
 
@@ -307,9 +383,7 @@ class ClickStatisticsController extends GetxController {
 
   Future<void> loadSessions() async {
     final config = selectedConfig.value;
-
     final task = selectedTask.value;
-
     final date = selectedDate.value;
 
     if (config == null ||
@@ -318,7 +392,7 @@ class ClickStatisticsController extends GetxController {
         task.isEmpty ||
         date == null ||
         date.isEmpty) {
-      _clearFromDate();
+      _clearFromTask();
       return;
     }
 
@@ -351,9 +425,7 @@ class ClickStatisticsController extends GetxController {
 
   Future<void> selectSession(ClickStatisticsSession session) async {
     final config = selectedConfig.value;
-
     final task = selectedTask.value;
-
     final date = selectedDate.value;
 
     if (config == null || task == null || date == null) {
@@ -384,6 +456,9 @@ class ClickStatisticsController extends GetxController {
 
       // 恢复默认热力图强度。
       heatIntensity.value = 0.8;
+
+      // 切换 Session 后清除悬浮状态。
+      hoveredEvent.value = null;
     } catch (e) {
       errorMessage.value = e.toString();
     } finally {
@@ -405,25 +480,42 @@ class ClickStatisticsController extends GetxController {
   // ---------------------------------------------------------------------------
 
   void _clearFromConfig() {
-    tasks.clear();
-
-    _clearFromTask();
-  }
-
-  void _clearFromTask() {
     dates.clear();
-
-    _clearFromDate();
-  }
-
-  void _clearFromDate() {
+    tasks.clear();
     sessions.clear();
 
     selectedDate.value = null;
+    selectedTask.value = null;
+    selectedSession.value = null;
+
+    detail.value = null;
+    hoveredEvent.value = null;
+
+    _taskDates.clear();
+
+    resetTimeline();
+  }
+
+  void _clearFromDate() {
+    tasks.clear();
+    sessions.clear();
+
+    selectedTask.value = null;
+    selectedSession.value = null;
+
+    detail.value = null;
+    hoveredEvent.value = null;
+
+    resetTimeline();
+  }
+
+  void _clearFromTask() {
+    sessions.clear();
 
     selectedSession.value = null;
 
     detail.value = null;
+    hoveredEvent.value = null;
 
     resetTimeline();
   }

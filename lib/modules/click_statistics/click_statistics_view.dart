@@ -76,10 +76,10 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
                     _buildConfigDropdown(context),
                     const SizedBox(height: 12),
 
-                    _buildTaskDropdown(context),
+                    _buildDateDropdown(context),
                     const SizedBox(height: 12),
 
-                    _buildDateDropdown(context),
+                    _buildTaskDropdown(context),
                     const SizedBox(height: 20),
 
                     Text(
@@ -134,10 +134,10 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
             _buildConfigDropdown(context),
             const SizedBox(height: 12),
 
-            _buildTaskDropdown(context),
+            _buildDateDropdown(context),
             const SizedBox(height: 12),
 
-            _buildDateDropdown(context),
+            _buildTaskDropdown(context),
             const SizedBox(height: 20),
 
             Text('运行记录', style: Theme.of(context).textTheme.titleMedium),
