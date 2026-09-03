@@ -229,7 +229,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
             .map(
               (value) => DropdownMenuItem<String>(
                 value: value,
-                child: Text(value, overflow: TextOverflow.ellipsis),
+                child: Text(value.tr, overflow: TextOverflow.ellipsis),
               ),
             )
             .toList(),
@@ -386,7 +386,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
             children: [
               Expanded(
                 child: Text(
-                  detail.task,
+                  detail.task.tr,
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
               ),
