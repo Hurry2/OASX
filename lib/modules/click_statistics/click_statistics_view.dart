@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:oasx/modules/click_statistics/click_statistics_controller.dart';
@@ -189,7 +191,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
   Widget _buildConfigDropdown(BuildContext context) {
     return Obx(() {
       final items = controller.configs;
-
       final selected = controller.selectedConfig.value;
 
       return DropdownButtonFormField<String>(
@@ -216,7 +217,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
   Widget _buildTaskDropdown(BuildContext context) {
     return Obx(() {
       final items = controller.tasks;
-
       final selected = controller.selectedTask.value;
 
       return DropdownButtonFormField<String>(
@@ -243,7 +243,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
   Widget _buildDateDropdown(BuildContext context) {
     return Obx(() {
       final items = controller.dates;
-
       final selected = controller.selectedDate.value;
 
       return DropdownButtonFormField<String>(
@@ -339,6 +338,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
                     const SizedBox(height: 4),
                     Text(
                       '${session.totalClicks} 次点击 · '
+                      '${session.totalSwipes} 次滑动 · '
                       '${_formatDuration(session.durationSeconds)}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -410,6 +410,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
             runSpacing: 12,
             children: [
               _buildStatCard(context, '总点击', '${detail.totalClicks}'),
+              _buildStatCard(context, '总滑动', '${detail.totalSwipes}'),
               _buildStatCard(
                 context,
                 '运行时间',
@@ -445,19 +446,25 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 
   Widget _buildHeatmap(BuildContext context, ClickStatisticsDetail detail) {
     if (detail.events.isEmpty) {
-      return const Center(child: Text('没有点击记录'));
+      return const Center(child: Text('没有操作记录'));
     }
 
     return Obx(() {
       final currentTime = controller.timelineSeconds.value;
-
       final maxTime = detail.durationSeconds;
-
       final intensity = controller.heatIntensity.value;
 
       final visibleEvents = detail.events
           .where((event) => event.t <= currentTime)
           .toList();
+
+      final visibleClicks = visibleEvents
+          .where((event) => event.isClick)
+          .length;
+
+      final visibleSwipes = visibleEvents
+          .where((event) => event.isSwipe)
+          .length;
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -472,8 +479,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
               const SizedBox(width: 12),
 
               Text(
-                '${visibleEvents.length} / '
-                '${detail.events.length}',
+                '${visibleEvents.length} / ${detail.events.length} 次操作',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
 
@@ -618,7 +624,8 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
               SizedBox(
                 width: 100,
                 child: Text(
-                  '${_formatTimelineTime(currentTime)} / ${_formatTimelineTime(maxTime)}',
+                  '${_formatTimelineTime(currentTime)} / '
+                  '${_formatTimelineTime(maxTime)}',
                   textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -654,7 +661,8 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           Row(
             children: [
               Text(
-                '已显示 ${visibleEvents.length} 次点击',
+                '已显示 ${visibleEvents.length} 次操作 '
+                '($visibleClicks 次点击 · $visibleSwipes 次滑动)',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
 
@@ -688,23 +696,17 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
     const sourceWidth = 1280.0;
     const sourceHeight = 720.0;
 
-    // 当前热力图始终保持 1280:720 比例。
     final scaleX = size.width / sourceWidth;
-
     final scaleY = size.height / sourceHeight;
-
     final scale = scaleX < scaleY ? scaleX : scaleY;
 
     final drawWidth = sourceWidth * scale;
-
     final drawHeight = sourceHeight * scale;
 
     final offsetX = (size.width - drawWidth) / 2;
-
     final offsetY = (size.height - drawHeight) / 2;
 
     final sourceX = (localPosition.dx - offsetX) / scale;
-
     final sourceY = (localPosition.dy - offsetY) / scale;
 
     if (sourceX < 0 ||
@@ -715,31 +717,93 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
       return;
     }
 
-    // 鼠标需要靠近真实点击点才触发。
     const hitRadius = 12.0;
     const hitRadiusSquared = hitRadius * hitRadius;
 
     ClickStatisticsEvent? nearest;
 
-    double nearestDistanceSquared = hitRadiusSquared;
+    double nearestDistanceSquared = double.infinity;
 
     for (final event in events) {
-      final dx = event.x - sourceX;
+      if (event.isSwipe) {
+        final startX = event.startX?.toDouble();
+        final startY = event.startY?.toDouble();
+        final endX = event.endX?.toDouble();
+        final endY = event.endY?.toDouble();
 
-      final dy = event.y - sourceY;
+        if (startX == null || startY == null || endX == null || endY == null) {
+          continue;
+        }
 
-      final distanceSquared = dx * dx + dy * dy;
+        final distanceSquared = _distanceToLineSegmentSquared(
+          sourceX,
+          sourceY,
+          startX,
+          startY,
+          endX,
+          endY,
+        );
 
-      if (distanceSquared <= nearestDistanceSquared) {
-        nearestDistanceSquared = distanceSquared;
+        if (distanceSquared <= hitRadiusSquared &&
+            distanceSquared < nearestDistanceSquared) {
+          nearestDistanceSquared = distanceSquared;
+          nearest = event;
+        }
+      } else {
+        final x = event.x?.toDouble();
+        final y = event.y?.toDouble();
 
-        nearest = event;
+        if (x == null || y == null) {
+          continue;
+        }
+
+        final dx = x - sourceX;
+        final dy = y - sourceY;
+
+        final distanceSquared = dx * dx + dy * dy;
+
+        if (distanceSquared <= hitRadiusSquared &&
+            distanceSquared < nearestDistanceSquared) {
+          nearestDistanceSquared = distanceSquared;
+          nearest = event;
+        }
       }
     }
 
     if (!identical(controller.hoveredEvent.value, nearest)) {
       controller.setHoveredEvent(nearest);
     }
+  }
+
+  double _distanceToLineSegmentSquared(
+    double px,
+    double py,
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+  ) {
+    final dx = x2 - x1;
+    final dy = y2 - y1;
+
+    if (dx == 0 && dy == 0) {
+      final diffX = px - x1;
+      final diffY = py - y1;
+
+      return diffX * diffX + diffY * diffY;
+    }
+
+    final t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+
+    final clampedT = t.clamp(0.0, 1.0);
+
+    final nearestX = x1 + clampedT * dx;
+    final nearestY = y1 + clampedT * dy;
+
+    final diffX = px - nearestX;
+    final diffY = py - nearestY;
+
+    return diffX * diffX + diffY * diffY;
   }
 
   // ===========================================================================
@@ -754,7 +818,10 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
     double left = 14;
     double top = 14;
 
-    if (renderObject is RenderBox) {
+    final displayX = event.displayX;
+    final displayY = event.displayY;
+
+    if (renderObject is RenderBox && displayX != null && displayY != null) {
       final size = renderObject.size;
 
       const sourceWidth = 1280.0;
@@ -771,14 +838,14 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
       final offsetY = (size.height - drawHeight) / 2;
 
       final position = Offset(
-        offsetX + event.x * scale,
-        offsetY + event.y * scale,
+        offsetX + displayX * scale,
+        offsetY + displayY * scale,
       );
 
       left = position.dx + 14;
       top = position.dy + 14;
 
-      const estimatedHeight = 195.0;
+      final estimatedHeight = event.isSwipe ? 250.0 : 195.0;
 
       if (left + width > size.width) {
         left = position.dx - width - 14;
@@ -789,6 +856,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
       }
 
       left = left.clamp(4.0, size.width - width - 4);
+
       top = top.clamp(4.0, size.height - estimatedHeight - 4);
     }
 
@@ -812,9 +880,29 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
+                if (event.isSwipe) ...[
+                  _buildHoverRow('起点', '${event.startX}, ${event.startY}'),
 
-                _buildHoverRow('坐标', '${event.x}, ${event.y}'),
+                  _buildHoverRow('终点', '${event.endX}, ${event.endY}'),
+
+                  _buildHoverRow('距离', _formatSwipeDistance(event)),
+
+                  _buildHoverRow(
+                    '持续',
+                    event.duration == null
+                        ? '-'
+                        : '${event.duration!.toStringAsFixed(3)}s',
+                  ),
+
+                  _buildHoverRow(
+                    '耗时',
+                    event.elapsed == null
+                        ? '-'
+                        : '${event.elapsed!.toStringAsFixed(3)}s',
+                  ),
+                ] else ...[
+                  _buildHoverRow('坐标', '${event.x}, ${event.y}'),
+                ],
 
                 _buildHoverRow('时间', '${event.t.toStringAsFixed(3)}s'),
 
@@ -836,6 +924,24 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
         ),
       ),
     );
+  }
+
+  String _formatSwipeDistance(ClickStatisticsEvent event) {
+    final startX = event.startX;
+    final startY = event.startY;
+    final endX = event.endX;
+    final endY = event.endY;
+
+    if (startX == null || startY == null || endX == null || endY == null) {
+      return '-';
+    }
+
+    final dx = endX - startX;
+    final dy = endY - startY;
+
+    final distance = math.sqrt(dx * dx + dy * dy);
+
+    return '${distance.toStringAsFixed(1)}px';
   }
 
   Widget _buildHoverRow(String title, String value) {
@@ -930,7 +1036,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
     final total = seconds.round();
 
     final minutes = total ~/ 60;
-
     final remainSeconds = total % 60;
 
     if (minutes > 0) {
@@ -945,7 +1050,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
     final totalSeconds = seconds.floor();
 
     final minutes = totalSeconds ~/ 60;
-
     final remainSeconds = totalSeconds % 60;
 
     return '$minutes:'
@@ -976,17 +1080,14 @@ class ClickHeatmapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final scaleX = size.width / sourceWidth;
-
     final scaleY = size.height / sourceHeight;
 
     final scale = scaleX < scaleY ? scaleX : scaleY;
 
     final drawWidth = sourceWidth * scale;
-
     final drawHeight = sourceHeight * scale;
 
     final offsetX = (size.width - drawWidth) / 2;
-
     final offsetY = (size.height - drawHeight) / 2;
 
     canvas.save();
@@ -1021,12 +1122,18 @@ class ClickHeatmapPainter extends CustomPainter {
     final density = <String, int>{};
 
     for (final event in events) {
-      final x = event.x.clamp(0, 1279);
+      if (!event.isClick) {
+        continue;
+      }
 
-      final y = event.y.clamp(0, 719);
+      final x = event.x?.clamp(0, 1279);
+      final y = event.y?.clamp(0, 719);
+
+      if (x == null || y == null) {
+        continue;
+      }
 
       final gx = (x / gridSize).floor();
-
       final gy = (y / gridSize).floor();
 
       final key = '$gx:$gy';
@@ -1041,7 +1148,6 @@ class ClickHeatmapPainter extends CustomPainter {
         final parts = entry.key.split(':');
 
         final gx = int.parse(parts[0]);
-
         final gy = int.parse(parts[1]);
 
         final count = entry.value;
@@ -1066,6 +1172,51 @@ class ClickHeatmapPainter extends CustomPainter {
     }
 
     // ------------------------------------------------------------------------
+    // Swipe paths
+    // ------------------------------------------------------------------------
+
+    final swipePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFF444444)
+      ..isAntiAlias = true;
+
+    final swipeEndpointPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = const Color(0xFF303030)
+      ..isAntiAlias = true;
+
+    for (final event in events) {
+      if (!event.isSwipe) {
+        continue;
+      }
+
+      final startX = event.startX?.clamp(0, 1279);
+      final startY = event.startY?.clamp(0, 719);
+      final endX = event.endX?.clamp(0, 1279);
+      final endY = event.endY?.clamp(0, 719);
+
+      if (startX == null || startY == null || endX == null || endY == null) {
+        continue;
+      }
+
+      final start = Offset(startX.toDouble(), startY.toDouble());
+
+      final end = Offset(endX.toDouble(), endY.toDouble());
+
+      canvas.drawLine(start, end, swipePaint);
+
+      const radius = 4.0;
+
+      canvas.drawCircle(start, radius, swipeEndpointPaint);
+
+      canvas.drawCircle(end, radius, swipeEndpointPaint);
+
+      _drawSwipeArrow(canvas, start, end, swipePaint);
+    }
+
+    // ------------------------------------------------------------------------
     // Actual click points
     // ------------------------------------------------------------------------
 
@@ -1075,9 +1226,12 @@ class ClickHeatmapPainter extends CustomPainter {
       ..isAntiAlias = true;
 
     for (final event in events) {
-      final x = event.x.clamp(0, 1279).toDouble();
+      if (!event.isClick) {
+        continue;
+      }
 
-      final y = event.y.clamp(0, 719).toDouble();
+      final x = event.x!.clamp(0, 1279).toDouble();
+      final y = event.y!.clamp(0, 719).toDouble();
 
       canvas.drawCircle(Offset(x, y), pointRadius, pointPaint);
     }
@@ -1103,6 +1257,54 @@ class ClickHeatmapPainter extends CustomPainter {
     _drawCoordinateLabels(canvas);
 
     canvas.restore();
+  }
+
+  void _drawSwipeArrow(Canvas canvas, Offset start, Offset end, Paint paint) {
+    final dx = end.dx - start.dx;
+    final dy = end.dy - start.dy;
+
+    final length = math.sqrt(dx * dx + dy * dy);
+
+    if (length < 1) {
+      return;
+    }
+
+    final unitX = dx / length;
+    final unitY = dy / length;
+
+    const arrowLength = 10.0;
+    const arrowWidth = 5.0;
+
+    final tip = end;
+
+    final base = Offset(
+      end.dx - unitX * arrowLength,
+      end.dy - unitY * arrowLength,
+    );
+
+    final perpendicular = Offset(-unitY, unitX);
+
+    final left = Offset(
+      base.dx + perpendicular.dx * arrowWidth,
+      base.dy + perpendicular.dy * arrowWidth,
+    );
+
+    final right = Offset(
+      base.dx - perpendicular.dx * arrowWidth,
+      base.dy - perpendicular.dy * arrowWidth,
+    );
+
+    final path = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(left.dx, left.dy)
+      ..lineTo(right.dx, right.dy)
+      ..close();
+
+    final arrowPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = paint.color;
+
+    canvas.drawPath(path, arrowPaint);
   }
 
   void _drawGrid(Canvas canvas, double width, double height) {

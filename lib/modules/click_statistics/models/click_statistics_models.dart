@@ -1,7 +1,5 @@
 class ClickStatisticsConfigList {
-  ClickStatisticsConfigList({
-    required this.configs,
-  });
+  ClickStatisticsConfigList({required this.configs});
 
   factory ClickStatisticsConfigList.fromJson(Map<String, dynamic> json) {
     final raw = json['configs'];
@@ -9,9 +7,9 @@ class ClickStatisticsConfigList {
     return ClickStatisticsConfigList(
       configs: raw is List
           ? raw
-              .map((e) => e.toString())
-              .where((e) => e.trim().isNotEmpty)
-              .toList()
+                .map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList()
           : <String>[],
     );
   }
@@ -19,12 +17,8 @@ class ClickStatisticsConfigList {
   final List<String> configs;
 }
 
-
 class ClickStatisticsTaskList {
-  ClickStatisticsTaskList({
-    required this.config,
-    required this.tasks,
-  });
+  ClickStatisticsTaskList({required this.config, required this.tasks});
 
   factory ClickStatisticsTaskList.fromJson(Map<String, dynamic> json) {
     final raw = json['tasks'];
@@ -33,9 +27,9 @@ class ClickStatisticsTaskList {
       config: json['config']?.toString() ?? '',
       tasks: raw is List
           ? raw
-              .map((e) => e.toString())
-              .where((e) => e.trim().isNotEmpty)
-              .toList()
+                .map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList()
           : <String>[],
     );
   }
@@ -43,7 +37,6 @@ class ClickStatisticsTaskList {
   final String config;
   final List<String> tasks;
 }
-
 
 class ClickStatisticsDateList {
   ClickStatisticsDateList({
@@ -60,9 +53,9 @@ class ClickStatisticsDateList {
       task: json['task']?.toString() ?? '',
       dates: raw is List
           ? raw
-              .map((e) => e.toString())
-              .where((e) => e.trim().isNotEmpty)
-              .toList()
+                .map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList()
           : <String>[],
     );
   }
@@ -71,7 +64,6 @@ class ClickStatisticsDateList {
   final String task;
   final List<String> dates;
 }
-
 
 class ClickStatisticsSession {
   ClickStatisticsSession({
@@ -83,6 +75,7 @@ class ClickStatisticsSession {
     required this.success,
     required this.status,
     required this.totalClicks,
+    required this.totalSwipes,
   });
 
   factory ClickStatisticsSession.fromJson(Map<String, dynamic> json) {
@@ -95,6 +88,7 @@ class ClickStatisticsSession {
       success: json['success'] == true,
       status: json['status']?.toString() ?? '',
       totalClicks: _readInt(json['total_clicks']),
+      totalSwipes: _readInt(json['total_swipes']),
     );
   }
 
@@ -110,11 +104,11 @@ class ClickStatisticsSession {
   final String status;
 
   final int totalClicks;
+  final int totalSwipes;
 
   DateTime? get startTime => _tryParseDateTime(startTimeText);
   DateTime? get endTime => _tryParseDateTime(endTimeText);
 }
-
 
 class ClickStatisticsSessionList {
   ClickStatisticsSessionList({
@@ -129,13 +123,13 @@ class ClickStatisticsSessionList {
 
     final sessions = raw is List
         ? raw
-            .whereType<Map>()
-            .map(
-              (item) => ClickStatisticsSession.fromJson(
-                Map<String, dynamic>.from(item),
-              ),
-            )
-            .toList()
+              .whereType<Map>()
+              .map(
+                (item) => ClickStatisticsSession.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
         : <ClickStatisticsSession>[];
 
     return ClickStatisticsSessionList(
@@ -153,12 +147,18 @@ class ClickStatisticsSessionList {
   final List<ClickStatisticsSession> sessions;
 }
 
-
 class ClickStatisticsEvent {
   ClickStatisticsEvent({
+    required this.type,
     required this.t,
     required this.x,
     required this.y,
+    required this.startX,
+    required this.startY,
+    required this.endX,
+    required this.endY,
+    required this.duration,
+    required this.elapsed,
     required this.controlName,
     required this.method,
     required this.interval,
@@ -166,30 +166,80 @@ class ClickStatisticsEvent {
   });
 
   factory ClickStatisticsEvent.fromJson(Map<String, dynamic> json) {
+    final type = json['type']?.toString() ?? 'click';
+    final isSwipe = type == 'swipe';
+
     return ClickStatisticsEvent(
+      type: type,
       t: _readDouble(json['t']),
-      x: _readInt(json['x']),
-      y: _readInt(json['y']),
+      x: isSwipe ? null : _readInt(json['x']),
+      y: isSwipe ? null : _readInt(json['y']),
+      startX: isSwipe ? _readInt(json['start_x']) : null,
+      startY: isSwipe ? _readInt(json['start_y']) : null,
+      endX: isSwipe ? _readInt(json['end_x']) : null,
+      endY: isSwipe ? _readInt(json['end_y']) : null,
+      duration: isSwipe && json['duration'] != null
+          ? _readDouble(json['duration'])
+          : null,
+      elapsed: isSwipe && json['elapsed'] != null
+          ? _readDouble(json['elapsed'])
+          : null,
       controlName: json['control_name']?.toString() ?? '',
       method: json['method']?.toString() ?? '',
-      interval: json['interval'] == null
-          ? null
-          : _readDouble(json['interval']),
+      interval: json['interval'] == null ? null : _readDouble(json['interval']),
       timestamp: json['timestamp']?.toString() ?? '',
     );
   }
 
+  /// 事件类型。
+  ///
+  /// 旧 JSON 没有 type 时默认为 click。
+  final String type;
+
   final double t;
-  final int x;
-  final int y;
+
+  /// Click 坐标。
+  ///
+  /// Swipe 事件为 null。
+  final int? x;
+  final int? y;
+
+  /// Swipe 起点。
+  ///
+  /// Click 事件为 null。
+  final int? startX;
+  final int? startY;
+
+  /// Swipe 终点。
+  ///
+  /// Click 事件为 null。
+  final int? endX;
+  final int? endY;
+
+  /// Swipe 持续时间。
+  final double? duration;
+
+  /// Swipe 实际执行耗时。
+  final double? elapsed;
 
   final String controlName;
   final String method;
 
   final double? interval;
   final String timestamp;
-}
 
+  bool get isSwipe => type == 'swipe';
+
+  bool get isClick => !isSwipe;
+
+  /// 用于热力图等需要一个主坐标的位置。
+  ///
+  /// Click 使用点击坐标；
+  /// Swipe 使用滑动起点。
+  int? get displayX => isSwipe ? startX : x;
+
+  int? get displayY => isSwipe ? startY : y;
+}
 
 class ClickStatisticsDetail {
   ClickStatisticsDetail({
@@ -211,13 +261,13 @@ class ClickStatisticsDetail {
 
     final events = rawEvents is List
         ? rawEvents
-            .whereType<Map>()
-            .map(
-              (item) => ClickStatisticsEvent.fromJson(
-                Map<String, dynamic>.from(item),
-              ),
-            )
-            .toList()
+              .whereType<Map>()
+              .map(
+                (item) => ClickStatisticsEvent.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList()
         : <ClickStatisticsEvent>[];
 
     final rawSummary = json['summary'];
@@ -260,39 +310,46 @@ class ClickStatisticsDetail {
   DateTime? get startTime => _tryParseDateTime(startTimeText);
   DateTime? get endTime => _tryParseDateTime(endTimeText);
 
-  int get totalClicks => events.length;
+  /// 优先使用后端 summary。
+  ///
+  /// 没有 summary 时，根据 events 兼容计算。
+  int get totalClicks {
+    final value = summary['total_clicks'];
+    if (value != null) {
+      return _readInt(value);
+    }
+
+    return events.where((event) => event.isClick).length;
+  }
+
+  /// 优先使用后端 summary。
+  ///
+  /// 没有 summary 时，根据 events 兼容计算。
+  int get totalSwipes {
+    final value = summary['total_swipes'];
+    if (value != null) {
+      return _readInt(value);
+    }
+
+    return events.where((event) => event.isSwipe).length;
+  }
 }
 
-
-int _readInt(
-  dynamic value, {
-  int fallback = 0,
-}) {
+int _readInt(dynamic value, {int fallback = 0}) {
   if (value is num) {
     return value.toInt();
   }
 
-  return int.tryParse(
-        value?.toString() ?? '',
-      ) ??
-      fallback;
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
-
-double _readDouble(
-  dynamic value, {
-  double fallback = 0,
-}) {
+double _readDouble(dynamic value, {double fallback = 0}) {
   if (value is num) {
     return value.toDouble();
   }
 
-  return double.tryParse(
-        value?.toString() ?? '',
-      ) ??
-      fallback;
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
-
 
 DateTime? _tryParseDateTime(String value) {
   final text = value.trim();
