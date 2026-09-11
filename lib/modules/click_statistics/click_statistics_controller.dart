@@ -67,13 +67,15 @@ class ClickStatisticsController extends GetxController {
   // 实例下任务 / 日期缓存
   // ---------------------------------------------------------------------------
 
-  /// 当前实例下所有任务对应的日期。
-  ///
-  /// 只用于在现有 API 的基础上实现：
-  /// 实例 -> 日期 -> 任务
-  ///
-  /// 不修改后端，也不新增 API。
+  /// 当前实例的任务 -> 日期。
   final Map<String, Set<String>> _taskDates = {};
+
+  /// 已加载过的实例索引。
+  ///
+  /// config
+  ///   -> task
+  ///       -> dates
+  final Map<String, Map<String, Set<String>>> _taskDatesCache = {};
 
   @override
   void onInit() {
@@ -218,14 +220,6 @@ class ClickStatisticsController extends GetxController {
   // ---------------------------------------------------------------------------
   // Date
   // ---------------------------------------------------------------------------
-
-  /// 获取当前实例下所有任务的日期并合并。
-  ///
-  /// 使用已有：
-  ///   getClickStatisticsTasks(config)
-  ///   getClickStatisticsDates(config, task)
-  ///
-  /// 不新增 API。
   Future<void> loadDates() async {
     final config = selectedConfig.value;
 
@@ -249,37 +243,40 @@ class ClickStatisticsController extends GetxController {
 
     resetTimeline();
 
-    _taskDates.clear();
-
     try {
-      final taskResult = await api.getClickStatisticsTasks(config);
+      Map<String, Set<String>> taskDates;
 
-      if (taskResult.tasks.isEmpty) {
-        return;
+      final cached = _taskDatesCache[config];
+
+      if (cached != null) {
+        // 已经加载过这个实例，直接使用内存缓存。
+        taskDates = cached;
+      } else {
+        final result = await api.getClickStatisticsIndex(config);
+
+        taskDates = {};
+
+        for (final entry in result.dates.entries) {
+          final date = entry.key;
+
+          for (final task in entry.value) {
+            taskDates.putIfAbsent(task, () => <String>{}).add(date);
+          }
+        }
+
+        _taskDatesCache[config] = taskDates;
       }
 
-      // 并行获取每个任务的日期。
-      final results = await Future.wait(
-        taskResult.tasks.map((task) async {
-          try {
-            final result = await api.getClickStatisticsDates(config, task);
-
-            return MapEntry(task, result.dates.toSet());
-          } catch (_) {
-            return MapEntry(task, <String>{});
-          }
-        }),
-      );
+      _taskDates
+        ..clear()
+        ..addAll(
+          taskDates.map((key, value) => MapEntry(key, Set<String>.from(value))),
+        );
 
       final allDates = <String>{};
 
-      for (final entry in results) {
-        if (entry.value.isEmpty) {
-          continue;
-        }
-
-        _taskDates[entry.key] = entry.value;
-        allDates.addAll(entry.value);
+      for (final taskDates in _taskDates.values) {
+        allDates.addAll(taskDates);
       }
 
       final sortedDates = allDates.toList()..sort((a, b) => b.compareTo(a));
@@ -472,6 +469,8 @@ class ClickStatisticsController extends GetxController {
 
   @override
   Future<void> refresh() async {
+    _taskDatesCache.clear();
+
     await loadConfigs();
   }
 

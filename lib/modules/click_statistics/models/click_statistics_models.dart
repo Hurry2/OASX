@@ -17,6 +17,34 @@ class ClickStatisticsConfigList {
   final List<String> configs;
 }
 
+class ClickStatisticsIndex {
+  final String config;
+  final Map<String, List<String>> dates;
+
+  ClickStatisticsIndex({required this.config, required this.dates});
+
+  factory ClickStatisticsIndex.fromJson(Map<String, dynamic> json) {
+    final rawDates = json['dates'] as Map<String, dynamic>? ?? {};
+
+    final dates = <String, List<String>>{};
+
+    for (final entry in rawDates.entries) {
+      final value = entry.value;
+
+      if (value is List) {
+        dates[entry.key] = value.map((item) => item.toString()).toList();
+      } else {
+        dates[entry.key] = <String>[];
+      }
+    }
+
+    return ClickStatisticsIndex(
+      config: json['config']?.toString() ?? '',
+      dates: dates,
+    );
+  }
+}
+
 class ClickStatisticsTaskList {
   ClickStatisticsTaskList({required this.config, required this.tasks});
 

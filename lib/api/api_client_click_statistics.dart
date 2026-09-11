@@ -1,16 +1,11 @@
 part of 'api_client.dart';
 
 extension ApiClientClickStatisticsX on ApiClient {
-  Future<ClickStatisticsConfigList>
-      getClickStatisticsConfigs() async {
-    final res = await request(
-      () => get('/click-statistics/configs'),
-    );
+  Future<ClickStatisticsConfigList> getClickStatisticsConfigs() async {
+    final res = await request(() => get('/click-statistics/configs'));
 
     if (!res.isSuccess || res.data is! Map) {
-      throw Exception(
-        res.error ?? 'Invalid click statistics configs response',
-      );
+      throw Exception(res.error ?? 'Invalid click statistics configs response');
     }
 
     return ClickStatisticsConfigList.fromJson(
@@ -18,9 +13,24 @@ extension ApiClientClickStatisticsX on ApiClient {
     );
   }
 
+  Future<ClickStatisticsIndex> getClickStatisticsIndex(
+    String configName,
+  ) async {
+    final path =
+        '/click-statistics/'
+        '${Uri.encodeComponent(configName)}'
+        '/index';
 
-  Future<ClickStatisticsTaskList>
-      getClickStatisticsTasks(
+    final res = await request(() => get(path));
+
+    if (!res.isSuccess || res.data is! Map) {
+      throw Exception(res.error ?? 'Invalid click statistics index response');
+    }
+
+    return ClickStatisticsIndex.fromJson(Map<String, dynamic>.from(res.data));
+  }
+
+  Future<ClickStatisticsTaskList> getClickStatisticsTasks(
     String configName,
   ) async {
     final path =
@@ -28,14 +38,10 @@ extension ApiClientClickStatisticsX on ApiClient {
         '${Uri.encodeComponent(configName)}'
         '/tasks';
 
-    final res = await request(
-      () => get(path),
-    );
+    final res = await request(() => get(path));
 
     if (!res.isSuccess || res.data is! Map) {
-      throw Exception(
-        res.error ?? 'Invalid click statistics tasks response',
-      );
+      throw Exception(res.error ?? 'Invalid click statistics tasks response');
     }
 
     return ClickStatisticsTaskList.fromJson(
@@ -43,9 +49,7 @@ extension ApiClientClickStatisticsX on ApiClient {
     );
   }
 
-
-  Future<ClickStatisticsDateList>
-      getClickStatisticsDates(
+  Future<ClickStatisticsDateList> getClickStatisticsDates(
     String configName,
     String taskName,
   ) async {
@@ -56,14 +60,10 @@ extension ApiClientClickStatisticsX on ApiClient {
         '${Uri.encodeComponent(taskName)}'
         '/dates';
 
-    final res = await request(
-      () => get(path),
-    );
+    final res = await request(() => get(path));
 
     if (!res.isSuccess || res.data is! Map) {
-      throw Exception(
-        res.error ?? 'Invalid click statistics dates response',
-      );
+      throw Exception(res.error ?? 'Invalid click statistics dates response');
     }
 
     return ClickStatisticsDateList.fromJson(
@@ -71,9 +71,7 @@ extension ApiClientClickStatisticsX on ApiClient {
     );
   }
 
-
-  Future<ClickStatisticsSessionList>
-      getClickStatisticsSessions(
+  Future<ClickStatisticsSessionList> getClickStatisticsSessions(
     String configName,
     String taskName,
     String date,
@@ -85,9 +83,7 @@ extension ApiClientClickStatisticsX on ApiClient {
         '${Uri.encodeComponent(taskName)}'
         '?date=${Uri.encodeComponent(date)}';
 
-    final res = await request(
-      () => get(path),
-    );
+    final res = await request(() => get(path));
 
     if (!res.isSuccess || res.data is! Map) {
       throw Exception(
@@ -100,9 +96,7 @@ extension ApiClientClickStatisticsX on ApiClient {
     );
   }
 
-
-  Future<ClickStatisticsDetail>
-      getClickStatisticsDetail(
+  Future<ClickStatisticsDetail> getClickStatisticsDetail(
     String configName,
     String taskName,
     String date,
@@ -118,18 +112,12 @@ extension ApiClientClickStatisticsX on ApiClient {
         '/'
         '${Uri.encodeComponent(sessionId)}';
 
-    final res = await request(
-      () => get(path),
-    );
+    final res = await request(() => get(path));
 
     if (!res.isSuccess || res.data is! Map) {
-      throw Exception(
-        res.error ?? 'Invalid click statistics detail response',
-      );
+      throw Exception(res.error ?? 'Invalid click statistics detail response');
     }
 
-    return ClickStatisticsDetail.fromJson(
-      Map<String, dynamic>.from(res.data),
-    );
+    return ClickStatisticsDetail.fromJson(Map<String, dynamic>.from(res.data));
   }
 }
