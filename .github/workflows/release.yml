@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - "master"
+      - "Forme"
     tags:
       - "v*"
 
@@ -20,7 +20,7 @@ env:
 jobs:
   warm_flutter_cache:
     name: Warm Flutter Cache (${{ matrix.label }})
-    if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/Forme' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
