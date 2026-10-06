@@ -11,8 +11,10 @@ import 'package:oasx/api/config_transfer_models.dart';
 import 'package:oasx/config/constants.dart';
 import 'package:oasx/modules/common/models/storage_key.dart';
 import 'package:oasx/modules/home/models/script_statistics_models.dart';
+import 'package:oasx/modules/home/models/storage_stats_models.dart';
 import 'package:oasx/modules/click_statistics/models/click_statistics_models.dart';
 import 'package:oasx/modules/log/log_browser_models.dart';
+import 'package:oasx/modules/server/models/deploy_webui_config.dart';
 import 'package:oasx/translation/i18n.dart';
 import 'package:oasx/translation/i18n_content.dart';
 import 'package:oasx/api/github_release_model.dart';
@@ -27,6 +29,7 @@ part 'api_client_task_transfer.dart';
 part 'api_client_script.dart';
 part 'api_client_feedback.dart';
 part 'api_client_statistics.dart';
+part 'api_client_storage_stats.dart';
 part 'api_client_logs.dart';
 part 'api_client_click_statistics.dart';
 
@@ -67,7 +70,15 @@ class ApiResult<T> {
 }
 
 class ApiClient {
-  static const String _defaultAddress = 'http://127.0.0.1:22288';
+  /// Base URL dialled while no OAS deploy file has been read yet.
+  ///
+  /// OAS lets the user change its listener via `Deploy.Webui`, so this is only a
+  /// starting point: [applyDeployWebuiConfig] replaces it as soon as the OAS root
+  /// path is known.
+  static String _fallbackAddress = DeployWebuiConfig.fallback.baseUrl;
+
+  static String get _defaultAddress => _fallbackAddress;
+
   static final ApiClient _instance = ApiClient._internal();
 
   factory ApiClient() => _instance;
@@ -96,28 +107,70 @@ class ApiClient {
         .addInterceptor(DioCacheInterceptor(options: _cacheOptions))
         .addInterceptor(ApiInterceptor())
         .create();
-    setAddress(_defaultAddress);
+    resetAddress();
   }
 
   String address = _defaultAddress;
 
+  /// Whether [address] came from the user instead of the OAS deploy file.
+  bool _addressIsExplicit = false;
+
+  /// Base URL requests are sent to, with the OAS default filled in.
+  ///
+  /// Unlike [address] this is never empty, so callers can parse it directly to
+  /// build derived URLs such as screenshots or WebSocket endpoints.
+  String get baseAddress =>
+      address.trim().isEmpty ? _defaultAddress : address.trim();
+
   bool get hasConfiguredBackendAddress => address.trim().isNotEmpty;
 
-  void setAddress(String address) {
-    final normalized = address.trim();
-    this.address = normalized;
+  /// Points the client at a user-supplied backend address.
+  ///
+  /// A bare `host:port` is accepted and prefixed with `http://`.
+  void setAddress(String address) => _applyAddress(address, explicit: true);
+
+  /// Points the client back at the address derived from the OAS deploy file.
+  void resetAddress() => _applyAddress(_defaultAddress, explicit: false);
+
+  /// Detaches the client from any backend.
+  ///
+  /// Used by the web build, which cannot read a local deploy file and therefore
+  /// needs an address typed in by the user.
+  void clearAddress() => _applyAddress('', explicit: false);
+
+  void _applyAddress(String value, {required bool explicit}) {
+    final normalized = _normalizeAddress(value);
+    address = normalized;
+    _addressIsExplicit = explicit && normalized.isNotEmpty;
     NetOptions.instance.dio.options.baseUrl = normalized.isEmpty
         ? _defaultAddress
         : normalized;
   }
 
-  void resetAddress() {
-    setAddress(_defaultAddress);
+  /// Adds the default scheme to a bare `host:port`, leaving an empty value empty.
+  static String _normalizeAddress(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty ||
+        trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    return 'http://$trimmed';
   }
 
-  void clearAddress() {
-    address = '';
-    NetOptions.instance.dio.options.baseUrl = _defaultAddress;
+  /// Adopts the listener declared by the OAS deploy file.
+  ///
+  /// Only clients that were never given an explicit address are re-pointed, so
+  /// an address typed in by the user always stays authoritative.
+  static void applyDeployWebuiConfig(DeployWebuiConfig config) {
+    final next = config.baseUrl;
+    if (next == _fallbackAddress) {
+      return;
+    }
+    _fallbackAddress = next;
+    if (!_instance._addressIsExplicit) {
+      _instance._applyAddress(next, explicit: false);
+    }
   }
 
   Future<ApiResult<T>> request<T>(

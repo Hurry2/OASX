@@ -123,6 +123,7 @@ flutter:
     - assets/release.txt
     - assets/images/Icon-app.png
     - assets/images/Icon-app.ico
+    - assets/storage_stats/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

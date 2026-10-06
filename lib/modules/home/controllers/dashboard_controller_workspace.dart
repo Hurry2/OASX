@@ -111,6 +111,15 @@ extension HomeDashboardWorkspaceX on HomeDashboardController {
     return activeWorkbenchTab.value == HomeWorkbenchTab.stats;
   }
 
+  /// Returns whether the storage (纳物库) tab is currently rendered.
+  bool get isStorageStatsVisibleInCurrentLayout {
+    if (workbenchLayoutMode.value == HomeWorkbenchLayoutMode.threePane) {
+      return displayedWorkbenchSidebarTabFor(workbenchLayoutMode.value) ==
+          HomeWorkbenchTab.storageStats;
+    }
+    return activeWorkbenchTab.value == HomeWorkbenchTab.storageStats;
+  }
+
   List<ScriptModel> get orderedScripts {
     final models = <ScriptModel>[];
     for (final name in _scriptService.scriptOrderList) {

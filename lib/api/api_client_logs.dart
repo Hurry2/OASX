@@ -142,12 +142,9 @@ extension ApiClientLogsX on ApiClient {
     );
   }
 
-  Uri _baseUri() {
-    final normalized = address.trim().isEmpty
-        ? ApiClient._defaultAddress
-        : address.trim();
-    return Uri.parse(normalized);
-  }
+  /// Resolves the backend base URI, falling back to the OAS default so the
+  /// result is always absolute.
+  Uri _baseUri() => Uri.parse(baseAddress);
 
   Map<String, dynamic> _jsonMap(dynamic value) {
     if (value is Map<String, dynamic>) {

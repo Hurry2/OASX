@@ -6,6 +6,7 @@ enum StorageKey {
   updateProxyUrl,
   lastUpdateCheckAt,
   address,
+  addressHistory,
   windowState,
   enableWindowState,
   enableSystemTray,
@@ -20,4 +21,5 @@ enum StorageKey {
   homeWorkbenchCollectionWidth,
   homeWorkbenchSplitRatio,
   autoDeploy,
+  storageStatsCleanup,
 }

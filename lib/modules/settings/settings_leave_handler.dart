@@ -7,6 +7,9 @@ Future<void> handleSettingsLeaveEffect() async {
     return;
   }
   final settingsController = Get.find<SettingsController>();
+  // 补记一条地址历史：用户可能没让输入框失焦就直接切走了。重复值会被去重，
+  // 没改过地址时也不会产生任何变化。
+  settingsController.rememberAddress(settingsController.address.value);
   if (!settingsController.consumeLoginConfigChanged()) {
     return;
   }

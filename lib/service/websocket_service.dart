@@ -21,11 +21,25 @@ class WebSocketService extends GetxService {
       return _clients[name]!._addListener(listener);
     }
 
-    url ??= 'ws://${ApiClient().address}/ws/$name';
+    url ??= _webSocketUrl(name);
     final client = WebSocketClient(name: name, url: url)._addListener(listener);
     _clients[name] = client;
     await client._connect();
     return client;
+  }
+
+  /// Builds the WebSocket endpoint for [name] from the configured backend base.
+  ///
+  /// The base address already carries a scheme (`http`/`https`), so it has to be
+  /// rewritten instead of being prefixed with `ws://`.
+  String _webSocketUrl(String name) {
+    final base = Uri.parse(ApiClient().baseAddress);
+    return base
+        .replace(
+          scheme: base.scheme == 'https' ? 'wss' : 'ws',
+          path: '/ws/$name',
+        )
+        .toString();
   }
 
   Future<void> send(String name, String message) async {

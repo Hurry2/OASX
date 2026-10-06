@@ -11,6 +11,7 @@ import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/log/log_mixin.dart';
 import 'package:oasx/modules/server/models/deploy_git_prefetcher.dart';
 import 'package:oasx/modules/server/models/deploy_python_config.dart';
+import 'package:oasx/modules/server/models/deploy_webui_config.dart';
 import 'package:oasx/modules/settings/controllers/settings_controller.dart';
 import 'package:oasx/service/locale_service.dart';
 import 'package:oasx/service/script_service.dart';
@@ -48,6 +49,7 @@ class ServerController extends GetxController with LogMixin {
     rootPathAuthenticated.value = authenticatePath(rootPathServer.value);
     if (rootPathAuthenticated.value) {
       readDeploy();
+      _syncBackendAddress();
     }
     super.onInit();
   }
@@ -62,7 +64,24 @@ class ServerController extends GetxController with LogMixin {
     );
     if (rootPathAuthenticated.value) {
       readDeploy();
+      _syncBackendAddress();
     }
+  }
+
+  /// Re-points the API client at the listener declared by the deploy file.
+  ///
+  /// OAS lets the user change `Deploy.Webui`, so the GUI must follow it instead
+  /// of assuming a fixed one. An address typed into settings wins.
+  void _syncBackendAddress() {
+    if (Get.isRegistered<SettingsController>()) {
+      Get.find<SettingsController>().syncApiAddress();
+      return;
+    }
+    final rootPath = rootPathServer.value.trim();
+    if (rootPath.isEmpty) {
+      return;
+    }
+    ApiClient.applyDeployWebuiConfig(DeployWebuiConfig.read(rootPath));
   }
 
   bool authenticatePath(String root) {
@@ -321,7 +340,10 @@ class ServerController extends GetxController with LogMixin {
         return;
       }
 
-      final address = _storage.read(StorageKey.address.name) ?? '';
+      // The deploy step may have rewritten `config/deploy.yaml`, so re-resolve
+      // the WebUI port before dialling; an address from settings still wins.
+      _syncBackendAddress();
+      final address = ApiClient().address.trim();
       if (address.isEmpty) {
         return;
       }
@@ -352,11 +374,7 @@ class ServerController extends GetxController with LogMixin {
     int retries = 1,
     Duration retryDelay = const Duration(milliseconds: 500),
   }) async {
-    final address =
-        rawAddress.startsWith('http://') || rawAddress.startsWith('https://')
-        ? rawAddress
-        : 'http://$rawAddress';
-    ApiClient().setAddress(address);
+    ApiClient().setAddress(rawAddress);
 
     for (int i = 0; i < retries; i++) {
       final connected = await ApiClient().testAddress();
