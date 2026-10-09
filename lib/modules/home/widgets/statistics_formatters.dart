@@ -53,6 +53,18 @@ String formatStatisticsDayLabel(String dayKey) {
   return DateFormat('MM-dd').format(value);
 }
 
+/// Formats a day key as a `yyyy-MM` month label.
+///
+/// Used by the storage trend axis when it is bucketed by month, where `MM-dd`
+/// would wrongly suggest a single day.
+String formatStatisticsMonthLabel(String dayKey) {
+  final value = DateTime.tryParse(dayKey);
+  if (value == null) {
+    return dayKey;
+  }
+  return DateFormat('yyyy-MM').format(value);
+}
+
 /// Formats generic metric values used by the historical chart.
 String formatStatisticsMetricValue(double value, {bool duration = false}) {
   if (duration) {

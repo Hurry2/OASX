@@ -5,6 +5,9 @@ import 'package:oasx/modules/home/models/storage_stats_models.dart';
 import 'package:oasx/modules/home/widgets/statistics_formatters.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_cleanup_dialog.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_date_picker.dart';
+import 'package:oasx/modules/home/widgets/storage_stats_style.dart';
+import 'package:oasx/modules/home/widgets/storage_stats_trend_panel.dart';
+import 'package:oasx/service/storage_stats_prefs_service.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
 const _kStoragePanelPadding = 12.0;
@@ -13,24 +16,15 @@ const _kStoragePanelSpacing = 12.0;
 const _kStorageResourceMinWidth = 104.0;
 const _kStorageResourceSpacing = 8.0;
 
-/// Increase tone: the game resource grew since the previous snapshot.
-const _kStorageDeltaUpTone = Color(0xFFD64545);
-
-/// Decrease tone: the game resource shrank since the previous snapshot.
-const _kStorageDeltaDownTone = Color(0xFF2E9E5B);
-
-/// Resource keys retired from the product that OAS may still emit.
-///
-/// OASX no longer ships artwork for these, so they are filtered out of the grid
-/// instead of rendering with a generic fallback glyph. Drop this once OAS stops
-/// writing the key (`tasks/DailyTrifles/script_task.py:run_storage_stats`).
-const _kStorageResourceExcluded = <String>{'海蛇皮'};
-
 /// `纳物库` (storage) tab content for the active script.
 ///
 /// Mirrors the log tab layout: one card holding a control row (the date
 /// selector on the left, actions on the right) above the scrolling content.
 /// The rendered instance is bound to the active config, so it is not pickable.
+///
+/// The body has two views, toggled from the control row and remembered across
+/// sessions: the `列表` grid (one date, per-resource change vs the previous
+/// date) and the `趋势` charts (every stored date, one small line per resource).
 class StorageStatsPanel extends StatelessWidget {
   /// Creates the storage statistics panel.
   const StorageStatsPanel({super.key});
@@ -38,6 +32,9 @@ class StorageStatsPanel extends StatelessWidget {
   /// Controller that owns storage statistics state.
   HomeStorageStatsController get controller =>
       Get.find<HomeStorageStatsController>();
+
+  /// Local preferences, i.e. which view is active.
+  StorageStatsPrefsService get prefs => Get.find<StorageStatsPrefsService>();
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +55,12 @@ class StorageStatsPanel extends StatelessWidget {
                         message: _placeholderMessage(),
                         loading: _isLoading,
                       )
-                    : _StorageStatsContent(controller: controller, day: day),
+                    : (prefs.trendViewEnabled.value
+                          ? StorageStatsTrendPanel(controller: controller)
+                          : _StorageStatsContent(
+                              controller: controller,
+                              day: day,
+                            )),
               ),
             ],
           );
@@ -107,21 +109,41 @@ class _StorageStatsToolbar extends StatelessWidget {
   final HomeStorageStatsController controller;
   final StorageStatsDay? day;
 
+  /// Local preferences holding the active view.
+  StorageStatsPrefsService get prefs => Get.find<StorageStatsPrefsService>();
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _leadingControls()),
+        Expanded(child: _leadingControls(context)),
         const SizedBox(width: 8),
         _trailingControls(context),
       ],
     );
   }
 
-  /// Builds the date selector shown on the left.
+  /// Builds what sits on the left: the date selector in the list view, the
+  /// covered window in the trend view.
   ///
   /// The instance is bound to the active config, so only the date is pickable.
-  Widget _leadingControls() {
+  /// The trend view charts every stored date at once, so a date selector there
+  /// would be a control that does nothing — it shows the covered range instead.
+  Widget _leadingControls(BuildContext context) {
+    final theme = Theme.of(context);
+    if (prefs.trendViewEnabled.value) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _trendRangeLabel(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
     final currentDay = day;
     if (currentDay == null) {
       return const SizedBox.shrink();
@@ -138,7 +160,21 @@ class _StorageStatsToolbar extends StatelessWidget {
     );
   }
 
-  /// Builds the cleanup, refresh actions and the error indicator.
+  /// `MM-DD ~ MM-DD` window covered by the trend view, oldest first.
+  String _trendRangeLabel() {
+    final dates = controller.days;
+    if (dates.isEmpty) {
+      return '';
+    }
+    final newest = formatStatisticsDayLabel(dates.first.date);
+    if (dates.length == 1) {
+      return newest;
+    }
+    return '${formatStatisticsDayLabel(dates.last.date)} ~ $newest';
+  }
+
+  /// Builds the view toggle, the cleanup, refresh actions and the error
+  /// indicator.
   Widget _trailingControls(BuildContext context) {
     final loading =
         controller.instancesLoading.value || controller.seriesLoading.value;
@@ -159,6 +195,7 @@ class _StorageStatsToolbar extends StatelessWidget {
               ),
             ),
           ),
+        if (day != null) _viewToggle(),
         if (day != null)
           IconButton(
             tooltip: I18n.storageStatsCleanup.tr,
@@ -182,6 +219,23 @@ class _StorageStatsToolbar extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  /// Builds the list/trend switch.
+  ///
+  /// Own `Obx` on purpose: the panel's outer `Obx` only tracks what its own
+  /// builder reads, and this button must follow the preference by itself.
+  /// The icon shows the view it switches *to*, and the tooltip names it.
+  Widget _viewToggle() {
+    return Obx(() {
+      final trend = prefs.trendViewEnabled.value;
+      return IconButton(
+        tooltip:
+            (trend ? I18n.storageStatsViewList : I18n.storageStatsViewTrend).tr,
+        onPressed: () => prefs.updateTrendViewEnabled(!trend),
+        icon: Icon(trend ? Icons.view_list_rounded : Icons.show_chart_rounded),
+      );
+    });
   }
 }
 
@@ -215,7 +269,7 @@ class _StorageResourceGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = day.entries
-        .where((entry) => !_kStorageResourceExcluded.contains(entry.key))
+        .where((entry) => !storageStatsExcludedResources.contains(entry.key))
         .toList(growable: false);
     if (entries.isEmpty) {
       return Center(child: Text(I18n.storageStatsEmpty.tr));
@@ -271,7 +325,7 @@ class _StorageResourceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final style = _StorageResourceStyle.resolve(name, scheme);
+    final style = StorageResourceStyle.resolve(name, scheme);
     final currentDelta = delta;
     final deltaText = currentDelta == null
         ? ''
@@ -289,7 +343,7 @@ class _StorageResourceCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _StorageResourceIcon(style: style),
+              StorageResourceIcon(style: style),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
@@ -319,165 +373,9 @@ class _StorageResourceCard extends StatelessWidget {
               ),
               if (deltaText.isNotEmpty && currentDelta != null) ...[
                 const SizedBox(width: 4),
-                _StorageDeltaLabel(delta: currentDelta, text: deltaText),
+                StorageDeltaLabel(delta: currentDelta, text: deltaText),
               ],
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Icon and accent tone used by one resource tile.
-class _StorageResourceStyle {
-  const _StorageResourceStyle({
-    required this.asset,
-    required this.icon,
-    required this.tone,
-  });
-
-  /// In-game icon (transparent PNG) bundled with the app.
-  final String asset;
-
-  /// Vector glyph used when the bundled icon is unavailable.
-  final IconData icon;
-
-  /// Accent color applied to the fallback glyph.
-  final Color tone;
-
-  /// Style used for resource names without a dedicated mapping.
-  static const _StorageResourceStyle fallback = _StorageResourceStyle(
-    asset: '',
-    icon: Icons.category_rounded,
-    tone: Color(0xFF757575),
-  );
-
-  /// Resolves the icon and tone for one resource name.
-  ///
-  /// Keys mirror the resource names produced by OAS
-  /// (`tasks/DailyTrifles/script_task.py:run_storage_stats`); the PNG files
-  /// live under `assets/storage_stats/`.
-  static _StorageResourceStyle resolve(String name, ColorScheme scheme) {
-    switch (name.trim()) {
-      case '金币':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/gold.png',
-          icon: Icons.monetization_on_rounded,
-          tone: Color(0xFFF2A600),
-        );
-      case '体力':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/sushi.png',
-          icon: Icons.bolt_rounded,
-          tone: Color(0xFFEF6C00),
-        );
-      case '勾玉':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/jade.png',
-          icon: Icons.diamond_rounded,
-          tone: Color(0xFF7E57C2),
-        );
-      case '蓝票':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/blue_ticket.png',
-          icon: Icons.confirmation_number_rounded,
-          tone: Color(0xFF1E88E5),
-        );
-      case '金蛇皮':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/gold_skin.png',
-          icon: Icons.auto_awesome_rounded,
-          tone: Color(0xFFC08A00),
-        );
-      case '逢魔皮':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/demon_skin.png',
-          icon: Icons.local_fire_department_rounded,
-          tone: Color(0xFFE64A19),
-        );
-      case '现世符咒':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/present_world_ticket.png',
-          icon: Icons.article_rounded,
-          tone: Color(0xFF00897B),
-        );
-      case '御札':
-        return const _StorageResourceStyle(
-          asset: 'assets/storage_stats/return_soul.png',
-          icon: Icons.style_rounded,
-          tone: Color(0xFF5C6BC0),
-        );
-      default:
-        return _StorageResourceStyle(
-          asset: fallback.asset,
-          icon: fallback.icon,
-          tone: scheme.onSurfaceVariant,
-        );
-    }
-  }
-}
-
-/// Bundled in-game icon for one resource, falling back to a vector glyph.
-class _StorageResourceIcon extends StatelessWidget {
-  const _StorageResourceIcon({required this.style});
-
-  /// Rendered edge length, in logical pixels.
-  static const double _size = 18;
-
-  final _StorageResourceStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    if (style.asset.isEmpty) {
-      return Icon(style.icon, size: _size - 2, color: style.tone);
-    }
-    // Icons are transparent RGBA cut-outs, so no rounded clip is applied —
-    // clipping would shave the artwork's corners.
-    return Image.asset(
-      style.asset,
-      width: _size,
-      height: _size,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.medium,
-      errorBuilder: (context, error, stackTrace) =>
-          Icon(style.icon, size: _size - 2, color: style.tone),
-    );
-  }
-}
-
-/// Signed change label rendered next to a resource value.
-class _StorageDeltaLabel extends StatelessWidget {
-  const _StorageDeltaLabel({required this.delta, required this.text});
-
-  final double delta;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final tone = delta > 0 ? _kStorageDeltaUpTone : _kStorageDeltaDownTone;
-    return Tooltip(
-      message: I18n.storageStatsComparePrevious.tr,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            delta > 0
-                ? Icons.arrow_upward_rounded
-                : Icons.arrow_downward_rounded,
-            size: 12,
-            color: tone,
-          ),
-          const SizedBox(width: 1),
-          Text(
-            text,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: tone,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ],
       ),

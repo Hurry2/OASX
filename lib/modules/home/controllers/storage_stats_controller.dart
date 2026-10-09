@@ -151,6 +151,51 @@ class HomeStorageStatsController extends GetxController {
     return currentValue - previousValue;
   }
 
+  /// Every resource the bound series mentions, in the order the newest snapshot
+  /// lists them.
+  ///
+  /// Newest-first matters: the game's own layout drives the order, so the trend
+  /// legend reads exactly like the list grid. Resources that only appear in
+  /// older snapshots are appended in the order they were first seen.
+  List<String> get resourceNames {
+    final ordered = <String>[];
+    for (final day in days) {
+      for (final name in day.data.keys) {
+        if (name.isEmpty || ordered.contains(name)) {
+          continue;
+        }
+        ordered.add(name);
+      }
+    }
+    return [
+      for (final name in ordered)
+        if (!storageStatsExcludedResources.contains(name)) name,
+    ];
+  }
+
+  /// Builds the ascending-by-date trend of one resource.
+  ///
+  /// [days] is newest first, so the series is reversed to read left to right on
+  /// a chart. A date whose snapshot holds no parsable value keeps its slot with
+  /// a `null` value, so the chart can break the line there instead of pretending
+  /// the resource was zero.
+  ///
+  /// [granularity] collapses the daily series into weeks or months; see
+  /// [bucketTrendPoints] for which reading survives inside a bucket.
+  List<StorageStatsTrendPoint> trendFor(
+    String resource, {
+    StorageStatsTrendGranularity granularity = StorageStatsTrendGranularity.day,
+  }) {
+    final daily = [
+      for (final day in days.reversed)
+        StorageStatsTrendPoint(
+          date: day.date,
+          value: parseStorageStatsValue(day.data[resource]),
+        ),
+    ];
+    return bucketTrendPoints(daily, granularity);
+  }
+
   /// Instance currently rendered, or `''` when nothing is bound.
   ///
   /// Exposed for the cleanup, which is always scoped to one instance so a

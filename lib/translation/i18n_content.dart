@@ -261,6 +261,19 @@ class I18n {
       storageStatsComparePrevious = 'storage_stats_compare_previous',
       storageStatsInstanceMissing = 'storage_stats_instance_missing',
       storageStatsInstanceMissingHint = 'storage_stats_instance_missing_hint';
+  static const String storageStatsViewList = 'storage_stats_view_list',
+      storageStatsViewTrend = 'storage_stats_view_trend',
+      storageStatsTrendResources = 'storage_stats_trend_resources',
+      storageStatsTrendSelectAll = 'storage_stats_trend_select_all',
+      storageStatsTrendClear = 'storage_stats_trend_clear',
+      storageStatsTrendRange = 'storage_stats_trend_range',
+      storageStatsTrendNoResource = 'storage_stats_trend_no_resource';
+  static const String storageStatsTrendGranularity =
+          'storage_stats_trend_granularity',
+      storageStatsTrendGranularityHint = 'storage_stats_trend_granularity_hint',
+      storageStatsTrendDay = 'storage_stats_trend_day',
+      storageStatsTrendWeek = 'storage_stats_trend_week',
+      storageStatsTrendMonth = 'storage_stats_trend_month';
   static const String homeTaskFilterAll = 'home_task_filter_all',
       homeTaskFilterEnabled = 'home_task_filter_enabled',
       homeTaskFilterDisabled = 'home_task_filter_disabled';

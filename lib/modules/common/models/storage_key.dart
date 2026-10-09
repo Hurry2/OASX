@@ -22,4 +22,7 @@ enum StorageKey {
   homeWorkbenchSplitRatio,
   autoDeploy,
   storageStatsCleanup,
+  storageStatsTrendView,
+  storageStatsTrendResources,
+  storageStatsTrendGranularity,
 }

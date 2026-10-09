@@ -5,6 +5,13 @@
 // last snapshot of each date. Values are free-form strings such as `2.11亿`,
 // `1.4万` or `36439`, so numeric parsing is best-effort.
 
+/// Resource keys OAS may still emit but the product no longer renders.
+///
+/// No artwork ships for these anymore, so both the list grid and the trend view
+/// skip them instead of falling back to a generic glyph. Drop an entry once OAS
+/// stops writing the key (`tasks/DailyTrifles/script_task.py:run_storage_stats`).
+const Set<String> storageStatsExcludedResources = <String>{'海蛇皮'};
+
 /// Instance index entry: one config name plus the dates that have data.
 class StorageStatsInstance {
   /// Creates one instance index entry.
@@ -564,4 +571,93 @@ String _trimDecimal(double value) {
     return text;
   }
   return text.replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+/// One point of a resource trend: a snapshot date plus its parsed value.
+///
+/// [value] is `null` when that date's snapshot holds no parsable number for the
+/// resource. The trend chart renders such a point as a gap instead of a zero,
+/// because "the resource was not reported" is not "the resource was empty".
+class StorageStatsTrendPoint {
+  /// Creates one trend point.
+  const StorageStatsTrendPoint({required this.date, required this.value});
+
+  /// Snapshot date, `YYYY-MM-DD`.
+  final String date;
+
+  /// Parsed resource value, or `null` when it could not be parsed.
+  final double? value;
+}
+
+/// Bucket width of a resource trend chart.
+enum StorageStatsTrendGranularity {
+  /// One point per stored snapshot date.
+  day,
+
+  /// One point per ISO week (weeks start on Monday).
+  week,
+
+  /// One point per calendar month.
+  month,
+}
+
+/// Groups daily trend points into [granularity]-wide buckets.
+///
+/// A bucket keeps the **last parsable reading** it contains, together with that
+/// reading's date. That is the right aggregation for an inventory: what matters
+/// is where the resource stood by the end of the week/month, not an average of
+/// daily snapshots. Buckets holding no parsable reading at all are dropped, so a
+/// stretch of missing data never turns into a fake zero.
+///
+/// [points] must be in ascending date order.
+List<StorageStatsTrendPoint> bucketTrendPoints(
+  List<StorageStatsTrendPoint> points,
+  StorageStatsTrendGranularity granularity,
+) {
+  if (granularity == StorageStatsTrendGranularity.day || points.length < 2) {
+    return points;
+  }
+  final bucketed = <StorageStatsTrendPoint>[];
+  String? currentKey;
+  for (final point in points) {
+    final key = _trendBucketKey(point.date, granularity);
+    if (key == null) {
+      // An unparsable date gets its own bucket rather than being dropped.
+      bucketed.add(point);
+      currentKey = null;
+      continue;
+    }
+    if (key != currentKey) {
+      bucketed.add(point);
+      currentKey = key;
+      continue;
+    }
+    // Later readings in the same bucket win, but a gap must not erase a value
+    // that was already recorded for that period.
+    if (point.value != null) {
+      bucketed[bucketed.length - 1] = point;
+    }
+  }
+  return [
+    for (final point in bucketed)
+      if (point.value != null) point,
+  ];
+}
+
+/// Bucket identity of one date: the Monday of its ISO week, or `YYYY-M`.
+///
+/// Returns `null` when [date] is not a parsable date. Date maths runs on a UTC
+/// midnight built from the parsed components, so a daylight-saving jump can
+/// never push a Monday back into the previous week.
+String? _trendBucketKey(String date, StorageStatsTrendGranularity granularity) {
+  final parsed = DateTime.tryParse(date);
+  if (parsed == null) {
+    return null;
+  }
+  if (granularity == StorageStatsTrendGranularity.month) {
+    return '${parsed.year}-${parsed.month}';
+  }
+  final value = DateTime.utc(parsed.year, parsed.month, parsed.day);
+  final monday = value.subtract(Duration(days: value.weekday - 1));
+  return '${monday.year}-${monday.month}-${monday.day}';
 }
