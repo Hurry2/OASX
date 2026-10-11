@@ -12,6 +12,26 @@
 /// stops writing the key (`tasks/DailyTrifles/script_task.py:run_storage_stats`).
 const Set<String> storageStatsExcludedResources = <String>{'海蛇皮'};
 
+/// Why the bound config has nothing to render.
+///
+/// The panel must never treat "not loaded yet" and "loaded, and empty" as the
+/// same thing: a config whose storage task is switched off would otherwise look
+/// exactly like a config that merely has no snapshot yet, and the user would be
+/// told nothing useful.
+enum StorageStatsEmptyReason {
+  /// No load has finished for the current config, so nothing is known yet.
+  unknown,
+
+  /// The backend reports no instance at all — the task never ran anywhere.
+  noInstances,
+
+  /// The backend has instances, but none belongs to the active config.
+  unmatchedInstance,
+
+  /// The active config's instance exists but holds no snapshot.
+  noSnapshot,
+}
+
 /// Instance index entry: one config name plus the dates that have data.
 class StorageStatsInstance {
   /// Creates one instance index entry.

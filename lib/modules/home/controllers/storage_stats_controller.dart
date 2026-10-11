@@ -33,9 +33,17 @@ class HomeStorageStatsController extends GetxController {
   /// Latest user-visible error message.
   final lastErrorMessage = ''.obs;
 
-  /// Whether the backend reported instances but none belongs to the active
-  /// config — i.e. the storage task has not been enabled/run for it yet.
-  final instanceUnmatched = false.obs;
+  /// Why the bound config has nothing to render.
+  ///
+  /// Set on every terminal path of a load and restored from the cache, so the
+  /// panel can always tell "not loaded yet" apart from "loaded, and empty".
+  final emptyReason = StorageStatsEmptyReason.unknown.obs;
+
+  /// Whether the rendered state is backed by a finished load.
+  ///
+  /// Cleared when the tab rebinds to another config, so the panel keeps showing
+  /// a spinner instead of an empty state it has no evidence for yet.
+  final bindingLoaded = false.obs;
 
   /// Whether a cleanup request (preview or apply) is in flight.
   final cleanupRunning = false.obs;
@@ -271,8 +279,16 @@ class HomeStorageStatsController extends GetxController {
     }
     final scriptName = dashboardController.activeScriptName.value.trim();
     if (_boundScriptName == scriptName && instanceNames.isNotEmpty) {
-      _refreshIfStale(scriptName);
-      return;
+      if (_bindings[scriptName] != null) {
+        _refreshIfStale(scriptName);
+        return;
+      }
+      // `instanceNames` outlived a detach but the binding did not, so the
+      // rendered state is not authoritative. Falling through to a reload is
+      // what keeps the empty-state hint from degrading into a blank "no data".
+      if (instancesLoading.value || seriesLoading.value) {
+        return;
+      }
     }
     await _bootstrap(scriptName, preferredDate: selectedDate.value);
   }
@@ -356,7 +372,8 @@ class HomeStorageStatsController extends GetxController {
       instancesLoading.value = true;
       seriesLoading.value = false;
       lastErrorMessage.value = '';
-      instanceUnmatched.value = false;
+      emptyReason.value = StorageStatsEmptyReason.unknown;
+      bindingLoaded.value = false;
     }
     try {
       final index = await ApiClient().getStorageStatsInstances();
@@ -366,15 +383,15 @@ class HomeStorageStatsController extends GetxController {
       instancesLoading.value = false;
       instanceNames.assignAll(index.names);
       if (instanceNames.isEmpty) {
-        _bindings.remove(scriptName);
-        _clearSelection();
+        _storeEmptyBinding(scriptName, StorageStatsEmptyReason.noInstances);
         return;
       }
       final target = _resolveInstance(preferredInstance, scriptName);
       if (target.isEmpty) {
-        instanceUnmatched.value = true;
-        _bindings.remove(scriptName);
-        _clearSelection();
+        _storeEmptyBinding(
+          scriptName,
+          StorageStatsEmptyReason.unmatchedInstance,
+        );
         return;
       }
       _selectedInstance = target;
@@ -398,7 +415,10 @@ class HomeStorageStatsController extends GetxController {
       }
       _bindings.remove(scriptName);
       instanceNames.clear();
-      instanceUnmatched.value = false;
+      emptyReason.value = StorageStatsEmptyReason.unknown;
+      // The load finished — it just finished badly — so the panel must show the
+      // error instead of a spinner that never resolves.
+      bindingLoaded.value = true;
       _clearSelection();
       lastErrorMessage.value = error.toString();
     }
@@ -426,12 +446,20 @@ class HomeStorageStatsController extends GetxController {
         return;
       }
       seriesLoading.value = false;
+      // An instance directory can exist without a single valid snapshot, which
+      // reads as "nothing to show" even though the task is switched on.
+      final reason = series.days.isEmpty
+          ? StorageStatsEmptyReason.noSnapshot
+          : StorageStatsEmptyReason.unknown;
       _bindings[scriptName] = _StorageStatsBinding(
         instances: List<String>.from(instanceNames),
         instance: instance,
         series: series,
+        reason: reason,
         fetchedAt: DateTime.now(),
       );
+      emptyReason.value = reason;
+      bindingLoaded.value = true;
       days.assignAll(series.days);
       if (days.isEmpty) {
         selectedDate.value = '';
@@ -452,8 +480,30 @@ class HomeStorageStatsController extends GetxController {
       _bindings.remove(scriptName);
       days.clear();
       selectedDate.value = '';
+      emptyReason.value = StorageStatsEmptyReason.unknown;
+      bindingLoaded.value = true;
       lastErrorMessage.value = error.toString();
     }
+  }
+
+  /// Caches "there is nothing to render for [scriptName]".
+  ///
+  /// Storing a binding even when nothing was found is what keeps the verdict —
+  /// and therefore the hint — alive across a detach. Without an entry,
+  /// [syncStorageStatsBinding] finds nothing to restore on the next entry, skips
+  /// the request through [_refreshIfStale], and the panel falls back to the
+  /// generic empty text even though the answer is already known.
+  void _storeEmptyBinding(String scriptName, StorageStatsEmptyReason reason) {
+    emptyReason.value = reason;
+    bindingLoaded.value = true;
+    _bindings[scriptName] = _StorageStatsBinding(
+      instances: List<String>.from(instanceNames),
+      instance: '',
+      series: const StorageStatsSeries(instance: '', days: []),
+      reason: reason,
+      fetchedAt: DateTime.now(),
+    );
+    _clearSelection();
   }
 
   /// Renders one cached binding without touching the network.
@@ -468,7 +518,10 @@ class HomeStorageStatsController extends GetxController {
     _selectedInstance = binding.instance;
     instancesLoading.value = false;
     seriesLoading.value = false;
-    instanceUnmatched.value = false;
+    // Restored, not reset: a cached "this config has nothing" is an answer, and
+    // blanking it here is exactly what used to drop the hint.
+    emptyReason.value = binding.reason;
+    bindingLoaded.value = true;
     lastErrorMessage.value = '';
     days.assignAll(binding.series.days);
     if (days.isEmpty) {
@@ -529,13 +582,14 @@ class HomeStorageStatsController extends GetxController {
   ///
   /// The series is deliberately kept, along with [_boundScriptName], so
   /// returning to the tab hits the early return in [syncStorageStatsBinding]
-  /// and renders instantly instead of showing a spinner again.
+  /// and renders instantly instead of showing a spinner again. [emptyReason] is
+  /// kept for the same reason: why a config is empty is a property of the
+  /// loaded data, not of the tab currently being on screen.
   void _detach() {
     _revision++;
     instancesLoading.value = false;
     seriesLoading.value = false;
     lastErrorMessage.value = '';
-    instanceUnmatched.value = false;
   }
 
   /// Drops the rendered payload when binding to a different config.
@@ -544,7 +598,8 @@ class HomeStorageStatsController extends GetxController {
     instanceNames.clear();
     days.clear();
     selectedDate.value = '';
-    instanceUnmatched.value = false;
+    emptyReason.value = StorageStatsEmptyReason.unknown;
+    bindingLoaded.value = false;
     lastErrorMessage.value = '';
   }
 
@@ -569,17 +624,22 @@ class _StorageStatsBinding {
     required this.instances,
     required this.instance,
     required this.series,
+    required this.reason,
     required this.fetchedAt,
   });
 
   /// Instance names reported by the backend when this binding was loaded.
   final List<String> instances;
 
-  /// Instance this binding resolved to.
+  /// Instance this binding resolved to, or `''` when none matched.
   final String instance;
 
   /// Full date series of [instance], newest first.
   final StorageStatsSeries series;
+
+  /// Why this binding has nothing to render; [StorageStatsEmptyReason.unknown]
+  /// once it does have something.
+  final StorageStatsEmptyReason reason;
 
   /// When the payload was fetched, used for the staleness check.
   final DateTime fetchedAt;

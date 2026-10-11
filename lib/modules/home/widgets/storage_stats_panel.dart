@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:oasx/modules/home/controllers/storage_stats_controller.dart';
@@ -25,16 +27,37 @@ const _kStorageResourceSpacing = 8.0;
 /// The body has two views, toggled from the control row and remembered across
 /// sessions: the `列表` grid (one date, per-resource change vs the previous
 /// date) and the `趋势` charts (every stored date, one small line per resource).
-class StorageStatsPanel extends StatelessWidget {
+class StorageStatsPanel extends StatefulWidget {
   /// Creates the storage statistics panel.
   const StorageStatsPanel({super.key});
 
+  @override
+  State<StorageStatsPanel> createState() => _StorageStatsPanelState();
+}
+
+class _StorageStatsPanelState extends State<StorageStatsPanel> {
   /// Controller that owns storage statistics state.
   HomeStorageStatsController get controller =>
       Get.find<HomeStorageStatsController>();
 
   /// Local preferences, i.e. which view is active.
   StorageStatsPrefsService get prefs => Get.find<StorageStatsPrefsService>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Safety net for the first entry into the tab. The controller is created
+    // with the home page and only syncs on dashboard changes, so a tab that is
+    // opened before its worker fires would render the previous config's state
+    // with no request of its own. Deferred past the frame because the call
+    // flips Rx flags, which must not happen while the tree is building.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(controller.syncStorageStatsBinding());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,9 +92,15 @@ class StorageStatsPanel extends StatelessWidget {
     );
   }
 
-  /// Whether any request is in flight.
+  /// Whether a spinner belongs in the placeholder.
+  ///
+  /// `!bindingLoaded` counts as loading on purpose: before the first finished
+  /// load nothing is known about this config, and the generic empty text would
+  /// be a claim the panel cannot back up.
   bool get _isLoading =>
-      controller.instancesLoading.value || controller.seriesLoading.value;
+      controller.instancesLoading.value ||
+      controller.seriesLoading.value ||
+      !controller.bindingLoaded.value;
 
   /// Returns the placeholder title for the current controller state.
   String _placeholderLabel() {
@@ -81,7 +110,7 @@ class StorageStatsPanel extends StatelessWidget {
     if (controller.lastErrorMessage.value.isNotEmpty) {
       return I18n.error.tr;
     }
-    if (controller.instanceUnmatched.value) {
+    if (controller.emptyReason.value != StorageStatsEmptyReason.unknown) {
       return I18n.storageStatsInstanceMissing.tr;
     }
     return I18n.storageStatsEmpty.tr;
@@ -95,7 +124,7 @@ class StorageStatsPanel extends StatelessWidget {
     if (controller.lastErrorMessage.value.isNotEmpty) {
       return controller.lastErrorMessage.value;
     }
-    if (controller.instanceUnmatched.value) {
+    if (controller.emptyReason.value != StorageStatsEmptyReason.unknown) {
       return I18n.storageStatsInstanceMissingHint.tr;
     }
     return '';
