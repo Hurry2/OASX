@@ -452,7 +452,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
     return Obx(() {
       final currentTime = controller.timelineSeconds.value;
       final maxTime = detail.durationSeconds;
-      final intensity = controller.heatIntensity.value;
 
       final visibleEvents = detail.events
           .where((event) => event.t <= currentTime)
@@ -484,6 +483,16 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
               ),
 
               const Spacer(),
+
+              Text('连线', style: Theme.of(context).textTheme.bodySmall),
+
+              Switch(
+                value: controller.showClickPath.value,
+                onChanged: controller.setShowClickPath,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+
+              const SizedBox(width: 8),
 
               Text('1280 × 720', style: Theme.of(context).textTheme.bodySmall),
             ],
@@ -537,7 +546,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
                           child: CustomPaint(
                             painter: ClickHeatmapPainter(
                               events: visibleEvents,
-                              intensity: intensity,
+                              showClickPath: controller.showClickPath.value,
                             ),
                           ),
                         ),
@@ -560,36 +569,6 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           ),
 
           const SizedBox(height: 10),
-
-          // ----------------------------------------------------------------
-          // 强度
-          // ----------------------------------------------------------------
-          Row(
-            children: [
-              SizedBox(
-                width: 50,
-                child: Text('强度', style: Theme.of(context).textTheme.bodySmall),
-              ),
-
-              Expanded(
-                child: Slider(
-                  min: 0.2,
-                  max: 1.5,
-                  value: intensity.clamp(0.2, 1.5),
-                  onChanged: controller.setHeatIntensity,
-                ),
-              ),
-
-              SizedBox(
-                width: 50,
-                child: Text(
-                  '${(intensity * 100).round()}%',
-                  textAlign: TextAlign.right,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ],
-          ),
 
           // ----------------------------------------------------------------
           // 时间轴
@@ -1066,16 +1045,65 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 // ============================================================================
 
 class ClickHeatmapPainter extends CustomPainter {
-  ClickHeatmapPainter({required this.events, required this.intensity});
+  ClickHeatmapPainter({required this.events, required this.showClickPath});
 
   final List<ClickStatisticsEvent> events;
-  final double intensity;
+
+  /// 是否按时间顺序把点击点连成一条线。
+  final bool showClickPath;
 
   static const double sourceWidth = 1280;
   static const double sourceHeight = 720;
 
   static const double gridSize = 40;
   static const double pointRadius = 2.5;
+
+  /// 温度图的统计格边长。
+  static const double heatCellSize = 32;
+
+  /// 单个热区的扩散半径。
+  ///
+  /// 取两格：相邻格子的光斑大幅重叠，边界就被抹平了，不会出现马赛克。
+  static const double heatBlobRadius = heatCellSize * 2;
+
+  /// 热区不透明度区间：最冷 / 最热。
+  static const double heatMinOpacity = 0.30;
+  static const double heatMaxOpacity = 0.85;
+
+  /// 冷热刻度的下限（一个格子里至少这么多下才算「最热」）。
+  ///
+  /// 密度是相对的（`本格点击 / 本场最高`），但整场只有两三次点击时
+  /// 不该全屏刷成红黄，所以给一个下限兜着。
+  static const int heatMinScale = 5;
+
+  /// 温度图调色板：蓝（最冷）→ 青 → 绿 → 黄 → 红（最热）。
+  static const List<Color> heatPalette = <Color>[
+    Color(0xFF2C7BE5),
+    Color(0xFF00B4D8),
+    Color(0xFF2ECC71),
+    Color(0xFFF1C40F),
+    Color(0xFFE74C3C),
+  ];
+
+  /// 连线颜色。
+  ///
+  /// 热力图本身是灰阶的，用橙色才拉得开；但整体压淡，免得盖住底下的点。
+  static const Color pathColor = Color(0xFFE8590C);
+
+  /// 连线和箭头的不透明度。
+  ///
+  /// 想让线更淡/更明显就改这两个值。
+  static const double pathLineOpacity = 0.45;
+  static const double pathArrowOpacity = 0.65;
+  static const double pathStrokeWidth = 1.6;
+  static const double pathArrowLength = 7;
+  static const double pathArrowWidth = 3.5;
+  static const double pathStartRadius = 4.5;
+
+  /// 短于这个长度的线段不画方向箭头。
+  ///
+  /// 否则连点两下同一个按钮时，箭头会叠在一起糊成一团。
+  static const double pathMinArrowSegment = 12;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1116,60 +1144,10 @@ class ClickHeatmapPainter extends CustomPainter {
     _drawGrid(canvas, sourceWidth, sourceHeight);
 
     // ------------------------------------------------------------------------
-    // Density
+    // Heat
     // ------------------------------------------------------------------------
 
-    final density = <String, int>{};
-
-    for (final event in events) {
-      if (!event.isClick) {
-        continue;
-      }
-
-      final x = event.x?.clamp(0, 1279);
-      final y = event.y?.clamp(0, 719);
-
-      if (x == null || y == null) {
-        continue;
-      }
-
-      final gx = (x / gridSize).floor();
-      final gy = (y / gridSize).floor();
-
-      final key = '$gx:$gy';
-
-      density[key] = (density[key] ?? 0) + 1;
-    }
-
-    if (density.isNotEmpty) {
-      final maxDensity = density.values.reduce((a, b) => a > b ? a : b);
-
-      for (final entry in density.entries) {
-        final parts = entry.key.split(':');
-
-        final gx = int.parse(parts[0]);
-        final gy = int.parse(parts[1]);
-
-        final count = entry.value;
-
-        final ratio = count / maxDensity;
-
-        final alpha = (0.06 + ratio * 0.50 * intensity).clamp(0.03, 0.65);
-
-        final paint = Paint()
-          ..style = PaintingStyle.fill
-          ..color = const Color(0xFF505050).withValues(alpha: alpha);
-
-        final rect = Rect.fromLTWH(
-          gx * gridSize,
-          gy * gridSize,
-          gridSize,
-          gridSize,
-        );
-
-        canvas.drawRect(rect, paint);
-      }
-    }
+    _drawHeat(canvas);
 
     // ------------------------------------------------------------------------
     // Swipe paths
@@ -1217,6 +1195,14 @@ class ClickHeatmapPainter extends CustomPainter {
     }
 
     // ------------------------------------------------------------------------
+    // Click path
+    // ------------------------------------------------------------------------
+
+    if (showClickPath) {
+      _drawClickPath(canvas);
+    }
+
+    // ------------------------------------------------------------------------
     // Actual click points
     // ------------------------------------------------------------------------
 
@@ -1259,7 +1245,17 @@ class ClickHeatmapPainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _drawSwipeArrow(Canvas canvas, Offset start, Offset end, Paint paint) {
+  /// 在 [end] 处画一个指向线段方向的箭头。
+  ///
+  /// [arrowLength] / [arrowWidth] 默认是滑动箭头的大小，连线用的是更小的一档。
+  void _drawSwipeArrow(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Paint paint, {
+    double arrowLength = 10.0,
+    double arrowWidth = 5.0,
+  }) {
     final dx = end.dx - start.dx;
     final dy = end.dy - start.dy;
 
@@ -1271,9 +1267,6 @@ class ClickHeatmapPainter extends CustomPainter {
 
     final unitX = dx / length;
     final unitY = dy / length;
-
-    const arrowLength = 10.0;
-    const arrowWidth = 5.0;
 
     final tip = end;
 
@@ -1305,6 +1298,172 @@ class ClickHeatmapPainter extends CustomPainter {
       ..color = paint.color;
 
     canvas.drawPath(path, arrowPaint);
+  }
+
+  /// 按时间顺序把所有点击点连成一条线。
+  ///
+  /// 后端是按实际执行顺序 append 事件的，所以列表顺序就是点击顺序，不用再排序。
+  /// 播放时传进来的 [events] 只包含已经发生的事件，线条会跟着进度逐段长出来。
+  ///
+  /// 只连 click：滑动本身已经有自己的箭头，混进来反而看不出点击顺序。
+  void _drawClickPath(Canvas canvas) {
+    final points = <Offset>[];
+
+    for (final event in events) {
+      if (!event.isClick) {
+        continue;
+      }
+
+      final x = event.x?.clamp(0, 1279);
+      final y = event.y?.clamp(0, 719);
+
+      if (x == null || y == null) {
+        continue;
+      }
+
+      points.add(Offset(x.toDouble(), y.toDouble()));
+    }
+
+    if (points.length < 2) {
+      return;
+    }
+
+    final linePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = pathStrokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = pathColor.withValues(alpha: pathLineOpacity)
+      ..isAntiAlias = true;
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+
+    for (var i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+
+    canvas.drawPath(path, linePaint);
+
+    // 箭头单独一档透明度：线压淡了，方向得还能看清。
+    final arrowPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = pathColor.withValues(alpha: pathArrowOpacity)
+      ..isAntiAlias = true;
+
+    for (var i = 1; i < points.length; i++) {
+      final from = points[i - 1];
+      final to = points[i];
+
+      if ((to - from).distance < pathMinArrowSegment) {
+        continue;
+      }
+
+      _drawSwipeArrow(
+        canvas,
+        from,
+        to,
+        arrowPaint,
+        arrowLength: pathArrowLength,
+        arrowWidth: pathArrowWidth,
+      );
+    }
+
+    // 起点画个空心圈，和终点区分开。
+    final startPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = pathStrokeWidth
+      ..color = pathColor.withValues(alpha: pathArrowOpacity)
+      ..isAntiAlias = true;
+
+    canvas.drawCircle(points.first, pathStartRadius, startPaint);
+  }
+
+  /// 把点击密度画成一片温度图。
+  ///
+  /// 做法是「按格统计密度 → 每格画一个径向渐变光斑」，不是画方块：
+  /// 光斑半径是格子的两倍，相邻格子互相叠加，边界就化开了。
+  /// 按密度从小到大画，热的压在上面，重叠处自然就是「热色赢」。
+  void _drawHeat(Canvas canvas) {
+    final density = <String, int>{};
+
+    for (final event in events) {
+      if (!event.isClick) {
+        continue;
+      }
+
+      final x = event.x?.clamp(0, 1279);
+      final y = event.y?.clamp(0, 719);
+
+      if (x == null || y == null) {
+        continue;
+      }
+
+      final gx = (x / heatCellSize).floor();
+      final gy = (y / heatCellSize).floor();
+
+      final key = '$gx:$gy';
+
+      density[key] = (density[key] ?? 0) + 1;
+    }
+
+    if (density.isEmpty) {
+      return;
+    }
+
+    final maxCount = density.values.reduce((a, b) => a > b ? a : b);
+
+    final scaleMax = math.max(maxCount, heatMinScale);
+
+    final cells = density.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+
+    for (final entry in cells) {
+      final parts = entry.key.split(':');
+
+      final center = Offset(
+        int.parse(parts[0]) * heatCellSize + heatCellSize / 2,
+        int.parse(parts[1]) * heatCellSize + heatCellSize / 2,
+      );
+
+      final ratio = entry.value / scaleMax;
+
+      final alpha = heatMinOpacity + (heatMaxOpacity - heatMinOpacity) * ratio;
+
+      final color = _paletteColor(ratio).withValues(alpha: alpha);
+
+      canvas.drawCircle(
+        center,
+        heatBlobRadius,
+        Paint()
+          ..shader =
+              RadialGradient(
+                colors: <Color>[
+                  color,
+                  color.withValues(alpha: alpha * 0.5),
+                  color.withValues(alpha: 0),
+                ],
+                stops: const <double>[0, 0.45, 1],
+              ).createShader(
+                Rect.fromCircle(center: center, radius: heatBlobRadius),
+              )
+          ..isAntiAlias = true,
+      );
+    }
+  }
+
+  /// 在 [heatPalette] 上按 [ratio]（0 ~ 1）插值取色。
+  static Color _paletteColor(double ratio) {
+    // `clamp` 返回 num，不转 double 的话 `Color.lerp` 的 t 过不了类型检查。
+    final scaled = ratio.clamp(0.0, 1.0).toDouble() * (heatPalette.length - 1);
+
+    // `clamp` 同样返回 num，直接用会变成「num 当列表下标」；math.min 保 int。
+    final lower = math.min(scaled.floor(), heatPalette.length - 2);
+
+    return Color.lerp(
+      heatPalette[lower],
+      heatPalette[lower + 1],
+      scaled - lower,
+    )!;
   }
 
   void _drawGrid(Canvas canvas, double width, double height) {
@@ -1361,6 +1520,7 @@ class ClickHeatmapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant ClickHeatmapPainter oldDelegate) {
-    return oldDelegate.events != events || oldDelegate.intensity != intensity;
+    return oldDelegate.events != events ||
+        oldDelegate.showClickPath != showClickPath;
   }
 }

@@ -42,11 +42,10 @@ class ClickStatisticsController extends GetxController {
   // 热力图
   // ---------------------------------------------------------------------------
 
-  /// 热力图整体强度。
+  /// 是否按时间顺序把点击点连成一条线。
   ///
-  /// 0.8 = 默认强度
-  /// 0.2 ~ 1.5 = UI 可调范围
-  final heatIntensity = 0.8.obs;
+  /// 播放时线条会跟着进度逐段生长，用来判断点击的先后顺序。
+  final showClickPath = true.obs;
 
   // ---------------------------------------------------------------------------
   // 时间轴
@@ -87,8 +86,8 @@ class ClickStatisticsController extends GetxController {
   // 热力图强度
   // ---------------------------------------------------------------------------
 
-  void setHeatIntensity(double value) {
-    heatIntensity.value = value.clamp(0.2, 1.5).toDouble();
+  void setShowClickPath(bool value) {
+    showClickPath.value = value;
   }
 
   // ---------------------------------------------------------------------------
@@ -450,9 +449,6 @@ class ClickStatisticsController extends GetxController {
 
       // 新 Session 默认显示完整点击记录。
       timelineSeconds.value = result.durationSeconds;
-
-      // 恢复默认热力图强度。
-      heatIntensity.value = 0.8;
 
       // 切换 Session 后清除悬浮状态。
       hoveredEvent.value = null;
