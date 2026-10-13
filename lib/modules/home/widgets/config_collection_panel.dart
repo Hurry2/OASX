@@ -53,6 +53,9 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
   static const _autoScrollEdgeExtent = 56.0;
   static const _autoScrollStep = 10.0;
 
+  /// Width of the reorder handle gutter on the left of every config row.
+  static const _dragHandleWidth = 26.0;
+
   /// Tracks whether the compact filter row should show the search field.
   bool _showCompactSearch = false;
 
@@ -98,21 +101,27 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
               selection: TextSelection.collapsed(offset: searchValue.length),
             );
           }
+          // 只有一条可见配置时排序没有意义，直接不显示手柄。
+          final canReorder = scripts.length > 1;
           final listView = DragTarget<ConfigDragPayload>(
             onWillAcceptWithDetails: (_) => true,
             onMove: (details) => _handleDragMove(details.offset),
             onLeave: (_) => _stopAutoScroll(),
             builder: (context, _, __) => SizedBox.expand(
               key: _listViewportKey,
-              child: ListView.separated(
-                controller: _listScrollController,
+              child: ReorderableListView.builder(
+                scrollController: _listScrollController,
+                // 默认手柄会浮在行右侧压住「更多」按钮，改用自己的。
+                buildDefaultDragHandles: false,
                 itemCount: scripts.length,
-                separatorBuilder: (_, __) => Divider(
-                  height: 1,
-                  color: Theme.of(context).colorScheme.outlineVariant,
+                onReorder: widget.controller.reorderScripts,
+                itemBuilder: (context, index) => _buildReorderableTile(
+                  context,
+                  script: scripts[index],
+                  index: index,
+                  isLast: index == scripts.length - 1,
+                  canReorder: canReorder,
                 ),
-                itemBuilder: (context, index) =>
-                    _buildDropTargetTile(context, scripts[index]),
               ),
             ),
           );
@@ -142,8 +151,70 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
     );
   }
 
+  /// Builds one row of the reorderable config list.
+  ///
+  /// The key is required by `ReorderableListView` and must stay stable across
+  /// rebuilds, so it is derived from the config name rather than the index.
+  Widget _buildReorderableTile(
+    BuildContext context, {
+    required ScriptModel script,
+    required int index,
+    required bool isLast,
+    required bool canReorder,
+  }) {
+    return Column(
+      key: ValueKey<String>('config-row-${script.name}'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildDropTargetTile(
+          context,
+          script,
+          dragHandle: canReorder ? _buildDragHandle(context, index) : null,
+        ),
+        if (!isLast)
+          Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+      ],
+    );
+  }
+
+  /// The grab area that starts a reorder drag.
+  ///
+  /// An explicit handle is used instead of making the whole row draggable: the
+  /// row is already an `InkWell` that activates the config and hosts a power
+  /// button plus a popup menu, and a dedicated handle keeps those unambiguous.
+  ///
+  /// The `Container` is transparent on purpose — it exists so the whole 26×34
+  /// box hit-tests (`ColoredBox` is opaque for hit testing), instead of only the
+  /// few pixels the glyph actually covers.
+  Widget _buildDragHandle(BuildContext context, int index) {
+    return ReorderableDragStartListener(
+      index: index,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.grab,
+        child: Container(
+          width: _dragHandleWidth,
+          height: 34,
+          alignment: Alignment.center,
+          color: Colors.transparent,
+          child: Icon(
+            Icons.drag_indicator_rounded,
+            size: 18,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Wraps one config tile in the drop target used by drag-copy flows.
-  Widget _buildDropTargetTile(BuildContext context, ScriptModel script) {
+  Widget _buildDropTargetTile(
+    BuildContext context,
+    ScriptModel script, {
+    Widget? dragHandle,
+  }) {
     return DragTarget<ConfigDragPayload>(
       onWillAcceptWithDetails: (details) {
         return _canAcceptPayload(script.name, details.data);
@@ -180,6 +251,7 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
           child: ConfigCollectionTile(
             controller: widget.controller,
             script: script,
+            dragHandle: dragHandle,
             onTap: () => widget.onActivateScript(script.name),
             onTogglePower: () => widget.onTogglePower(
               script.name,

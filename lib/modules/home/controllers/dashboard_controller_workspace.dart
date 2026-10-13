@@ -135,6 +135,39 @@ extension HomeDashboardWorkspaceX on HomeDashboardController {
     return orderedScripts.where(_matchesVisibleFilter).toList();
   }
 
+  /// Applies one drag from the config list to the persisted order.
+  ///
+  /// [oldIndex] / [newIndex] come straight from `ReorderableListView` and index
+  /// the **visible** list. When the search box or the state filter narrows the
+  /// list, that visible list is a sub-sequence of [orderedScripts], so the move
+  /// has to be mapped back onto the full order before it is written — otherwise
+  /// the filtered-out configs would be shuffled around as a side effect.
+  void reorderScripts(int oldIndex, int newIndex) {
+    final fullOrder = <String>[for (final model in orderedScripts) model.name];
+    if (fullOrder.length < 2) {
+      return;
+    }
+    final visibleOrder = <String>[
+      for (final model in visibleScripts) model.name,
+    ];
+    if (visibleOrder.isEmpty) {
+      return;
+    }
+    final next = reorderVisibleNames(
+      fullOrder: fullOrder,
+      visibleOrder: visibleOrder,
+      oldIndex: oldIndex,
+      newIndex: newIndex,
+    );
+    // 名字里不可能出现 \u0000，用它当分隔符比裸 join() 稳妥。
+    const separator = '\u0000';
+    if (next.length == fullOrder.length &&
+        next.join(separator) == fullOrder.join(separator)) {
+      return;
+    }
+    _scriptService.applyScriptOrder(next);
+  }
+
   ScriptModel? get activeScriptModel {
     return _scriptService.findScriptModel(activeScriptName.value.trim());
   }

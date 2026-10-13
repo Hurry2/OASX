@@ -16,6 +16,7 @@ class ConfigCollectionTile extends StatelessWidget {
     required this.onRename,
     required this.onExport,
     required this.onDelete,
+    this.dragHandle,
   });
 
   static const _actionSpacing = 8.0;
@@ -27,6 +28,11 @@ class ConfigCollectionTile extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onExport;
   final VoidCallback onDelete;
+
+  /// 拖动排序手柄，由列表注入。
+  ///
+  /// 为空时不占位：只有一条配置时排序没有意义，列表会直接不传。
+  final Widget? dragHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -40,9 +46,11 @@ class ConfigCollectionTile extends StatelessWidget {
           final isDragCopyLoading = controller.isDragCopyPendingFor(
             script.name,
           );
+          // 排序手柄会占掉左侧一条，窄窗下要提前切到紧凑布局。
           final compactThreshold =
               ConfigCollectionTile._compactLayoutThreshold +
-              (showLinkCheckbox ? 64 : 0);
+              (showLinkCheckbox ? 64 : 0) +
+              (dragHandle != null ? 28 : 0);
           final isCompact = constraints.maxWidth < compactThreshold;
           final rowColor = isActive
               ? theme.colorScheme.primaryContainer.withValues(alpha: 0.24)
@@ -87,6 +95,7 @@ class ConfigCollectionTile extends StatelessWidget {
                               script: script,
                               compact: isCompact,
                               accentColor: accentColor,
+                              dragHandle: dragHandle,
                               powerButton: _PowerButton(
                                 onTogglePower: onTogglePower,
                               ),
@@ -131,6 +140,7 @@ class _ScriptMeta extends StatelessWidget {
     required this.script,
     required this.compact,
     required this.accentColor,
+    required this.dragHandle,
     required this.powerButton,
     required this.popupButton,
   });
@@ -138,6 +148,7 @@ class _ScriptMeta extends StatelessWidget {
   final ScriptModel script;
   final bool compact;
   final Color accentColor;
+  final Widget? dragHandle;
   final Widget powerButton;
   final Widget popupButton;
 
@@ -148,6 +159,7 @@ class _ScriptMeta extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            if (dragHandle != null) ...[dragHandle!, const SizedBox(width: 2)],
             _RegularAccentBar(
               key: ValueKey<String>('config-accent-bar-${script.name}'),
               color: accentColor,
@@ -178,6 +190,7 @@ class _ScriptMeta extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (dragHandle != null) ...[dragHandle!, const SizedBox(width: 2)],
           _RegularAccentBar(
             key: ValueKey<String>('config-accent-bar-${script.name}'),
             color: accentColor,

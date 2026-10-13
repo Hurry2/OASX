@@ -7,6 +7,7 @@ import 'package:oasx/api/api_client.dart';
 import 'package:oasx/modules/common/controllers/progress_snackbar_controller.dart';
 import 'package:oasx/modules/common/models/storage_key.dart';
 import 'package:oasx/modules/home/models/config_model.dart';
+import 'package:oasx/modules/home/models/script_order.dart';
 import 'package:oasx/modules/home/models/taskitem_model.dart';
 import 'package:oasx/service/websocket_service.dart';
 import 'package:oasx/translation/i18n_content.dart';
@@ -19,6 +20,7 @@ import 'package:oasx/modules/log/script_log_browser_controller.dart';
 part 'script_service_ws.dart';
 part 'script_service_auto.dart';
 part 'script_service_config.dart';
+part 'script_service_order.dart';
 
 class ScriptService extends GetxService {
   // ignore: unused_field
@@ -28,6 +30,12 @@ class ScriptService extends GetxService {
   final scriptOrderList = <String>[].obs;
   final autoScriptList = <String>[].obs;
 
+  /// 用户拖动排序后的配置顺序，持久化在本地。
+  ///
+  /// 后端 `/config_list` 只按文件名返回，顺序不受 OASX 控制，所以每次同步
+  /// 服务端列表后都要用它重新排一遍，否则自定义顺序会被刷新冲掉。
+  final _customScriptOrder = <String>[];
+
   bool get _shouldSkipBackendReload {
     return PlatformUtils.isWeb && !ApiClient().hasConfiguredBackendAddress;
   }
@@ -35,6 +43,7 @@ class ScriptService extends GetxService {
   @override
   Future<void> onInit() async {
     _loadAutoScriptListFromStorage();
+    _loadCustomScriptOrderFromStorage();
     await reloadFromServer();
     super.onInit();
   }
@@ -85,13 +94,16 @@ class ScriptService extends GetxService {
     wsService.close(name);
     autoScriptList.removeWhere((e) => e == name);
     scriptOrderList.removeWhere((e) => e == name);
+    if (_customScriptOrder.remove(name)) {
+      _persistCustomScriptOrder();
+    }
   }
 
   void syncScriptOrder(Iterable<String> scripts) {
-    final normalized = scripts
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
+    final normalized = applyCustomScriptOrder(
+      scripts.map((e) => e.trim()).where((e) => e.isNotEmpty),
+      _customScriptOrder,
+    );
     scriptOrderList.value = normalized;
     for (final name in normalized) {
       if (!scriptModelMap.containsKey(name)) {

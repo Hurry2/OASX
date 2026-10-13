@@ -17,6 +17,7 @@ enum StorageKey {
   autoLoginAfterDeploy,
   temporaryDirectory,
   autoScriptList,
+  scriptOrder,
   homeControlScriptList,
   homeWorkbenchCollectionWidth,
   homeWorkbenchSplitRatio,
