@@ -219,6 +219,7 @@ final Map<String, String> _cn_ui = {
   I18n.homeStatsTasks: '任务数',
   I18n.homeStatsRunCount: '运行次数',
   I18n.homeStatsTotalDuration: '运行总时长',
+  I18n.homeStatsTaskTotalDuration: '任务总时长',
   I18n.homeStatsBattleCount: '战斗次数',
   I18n.homeStatsBattleTotalDuration: '战斗总耗时',
   I18n.homeStatsBattleAvgDuration: '战斗平均时长',

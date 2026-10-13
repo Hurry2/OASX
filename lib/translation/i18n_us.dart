@@ -154,6 +154,7 @@ final Map<String, String> _us_ui = {
   I18n.homeStatsTasks: 'Tasks',
   I18n.homeStatsRunCount: 'Runs',
   I18n.homeStatsTotalDuration: 'Total runtime',
+  I18n.homeStatsTaskTotalDuration: 'Total task duration',
   I18n.homeStatsBattleCount: 'Battles',
   I18n.homeStatsBattleTotalDuration: 'Total battle duration',
   I18n.homeStatsBattleAvgDuration: 'Avg battle duration',

@@ -183,6 +183,7 @@ class I18n {
       homeStatsTasks = 'home_stats_tasks',
       homeStatsRunCount = 'home_stats_run_count';
   static const String homeStatsTotalDuration = 'home_stats_total_duration',
+      homeStatsTaskTotalDuration = 'home_stats_task_total_duration',
       homeStatsBattleCount = 'home_stats_battle_count',
       homeStatsBattleTotalDuration = 'home_stats_battle_total_duration',
       homeStatsBattleAvgDuration = 'home_stats_battle_avg_duration';

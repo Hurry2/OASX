@@ -183,7 +183,9 @@ class _HeaderTopRow extends StatelessWidget {
         ),
         const SizedBox(width: _kStatisticsSummarySpacing),
         Text(
-          formatStatisticsDuration(statistics.totalRuntimeSeconds),
+          // Sum of the task durations, not the log's wall-clock span: the bars
+          // below must add up to this number.
+          formatStatisticsDuration(statistics.totalTaskDurationSeconds),
           textAlign: TextAlign.end,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -408,7 +410,7 @@ class _MetricDropdown extends StatelessWidget {
   String _labelForMetric(ScriptStatisticsChartMetric metric) {
     return switch (metric) {
       ScriptStatisticsChartMetric.totalDuration =>
-        I18n.homeStatsTotalDuration.tr,
+        I18n.homeStatsTaskTotalDuration.tr,
       ScriptStatisticsChartMetric.runCount => I18n.homeStatsMetricRunCount.tr,
       ScriptStatisticsChartMetric.battleCount =>
         I18n.homeStatsMetricBattleCount.tr,

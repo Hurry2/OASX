@@ -343,7 +343,7 @@ class _HistoryBarRow extends StatelessWidget {
 
   /// Builds tooltip lines without repeating the task name.
   String _tooltipText() {
-    return '${I18n.homeStatsTotalDuration.tr}: '
+    return '${I18n.homeStatsTaskTotalDuration.tr}: '
         '${formatStatisticsDuration(entry.value.totalDurationSeconds)}\n'
         '${I18n.homeStatsRunCount.tr}: ${entry.value.runCount}\n'
         '${I18n.homeStatsBattleCount.tr}: ${entry.value.battleCount}\n'

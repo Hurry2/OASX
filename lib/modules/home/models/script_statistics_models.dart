@@ -304,6 +304,21 @@ class ScriptStatisticsDay {
   /// Whether the selected date is today.
   bool get isToday => isStatisticsDateToday(dateKey);
 
+  /// Total time the tasks actually spent running, summed over every task.
+  ///
+  /// The backend also reports `total_runtime_seconds`, but that is a wall-clock
+  /// span measured between task boundaries in the log: it counts the idle gaps
+  /// between tasks too, so it can be several times longer than the time any task
+  /// really ran. Summing the per-task durations keeps this figure the exact total
+  /// of what the chart bars add up to.
+  double get totalTaskDurationSeconds {
+    var total = 0.0;
+    for (final task in tasks.values) {
+      total += task.totalDurationSeconds;
+    }
+    return total;
+  }
+
   /// Total distinct task count shown in the summary.
   int get taskCount => tasks.length;
 
