@@ -203,6 +203,11 @@ final Map<String, String> _us_ui = {
   I18n.storageStatsRefresh: 'Refresh',
   I18n.storageStatsScreenshot: 'Storage screenshot',
   I18n.storageStatsNoScreenshot: 'No screenshot for this date',
+  I18n.lastScreenshotTitle: 'Emulator screenshot',
+  I18n.lastScreenshotEmpty: 'No screenshot yet',
+  I18n.lastScreenshotRefresh: 'Refresh',
+  I18n.lastScreenshotCollapse: 'Collapse',
+  I18n.lastScreenshotExpand: 'Expand',
   I18n.storageStatsComparePrevious: 'Compared with the previous snapshot',
   I18n.storageStatsInstanceMissing: 'Storage stats is off for this config',
   I18n.storageStatsInstanceMissingHint:

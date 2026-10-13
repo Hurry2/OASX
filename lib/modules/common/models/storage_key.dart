@@ -26,4 +26,5 @@ enum StorageKey {
   storageStatsTrendView,
   storageStatsTrendResources,
   storageStatsTrendGranularity,
+  lastScreenshotCollapsed,
 }

@@ -261,6 +261,11 @@ class I18n {
       storageStatsComparePrevious = 'storage_stats_compare_previous',
       storageStatsInstanceMissing = 'storage_stats_instance_missing',
       storageStatsInstanceMissingHint = 'storage_stats_instance_missing_hint';
+  static const String lastScreenshotTitle = 'last_screenshot_title',
+      lastScreenshotEmpty = 'last_screenshot_empty',
+      lastScreenshotRefresh = 'last_screenshot_refresh',
+      lastScreenshotCollapse = 'last_screenshot_collapse',
+      lastScreenshotExpand = 'last_screenshot_expand';
   static const String storageStatsViewList = 'storage_stats_view_list',
       storageStatsViewTrend = 'storage_stats_view_trend',
       storageStatsTrendResources = 'storage_stats_trend_resources',

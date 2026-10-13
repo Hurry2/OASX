@@ -30,6 +30,7 @@ part 'api_client_script.dart';
 part 'api_client_feedback.dart';
 part 'api_client_statistics.dart';
 part 'api_client_storage_stats.dart';
+part 'api_client_screenshot.dart';
 part 'api_client_logs.dart';
 part 'api_client_click_statistics.dart';
 
