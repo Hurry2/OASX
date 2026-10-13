@@ -265,7 +265,12 @@ class I18n {
       lastScreenshotEmpty = 'last_screenshot_empty',
       lastScreenshotRefresh = 'last_screenshot_refresh',
       lastScreenshotCollapse = 'last_screenshot_collapse',
-      lastScreenshotExpand = 'last_screenshot_expand';
+      lastScreenshotExpand = 'last_screenshot_expand',
+      lastScreenshotCapturedAt = 'last_screenshot_captured_at',
+      lastScreenshotAgeJustNow = 'last_screenshot_age_just_now',
+      lastScreenshotAgeMinutes = 'last_screenshot_age_minutes',
+      lastScreenshotAgeHours = 'last_screenshot_age_hours',
+      lastScreenshotAgeDays = 'last_screenshot_age_days';
   static const String storageStatsViewList = 'storage_stats_view_list',
       storageStatsViewTrend = 'storage_stats_view_trend',
       storageStatsTrendResources = 'storage_stats_trend_resources',

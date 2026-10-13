@@ -208,6 +208,11 @@ final Map<String, String> _us_ui = {
   I18n.lastScreenshotRefresh: 'Refresh',
   I18n.lastScreenshotCollapse: 'Collapse',
   I18n.lastScreenshotExpand: 'Expand',
+  I18n.lastScreenshotCapturedAt: 'Captured @time · @age',
+  I18n.lastScreenshotAgeJustNow: 'just now',
+  I18n.lastScreenshotAgeMinutes: '@n min ago',
+  I18n.lastScreenshotAgeHours: '@n h ago',
+  I18n.lastScreenshotAgeDays: '@n d ago',
   I18n.storageStatsComparePrevious: 'Compared with the previous snapshot',
   I18n.storageStatsInstanceMissing: 'Storage stats is off for this config',
   I18n.storageStatsInstanceMissingHint:

@@ -14,7 +14,16 @@ extension HomeDashboardStartupX on HomeDashboardController {
   }
 
   Future<void> refreshAfterSettingsChanged() async {
-    await _scriptService.resetDashboardState();
+    try {
+      // 状态重置失败（例如某个长连接关不掉）不能阻断重新连接：否则切换后端
+      // 地址后界面会一直停在旧主机的数据上，只能手动点刷新。settings_controller
+      // 里杀服务后的同类调用也是这么兜的。
+      await _scriptService.resetDashboardState().timeout(
+        const Duration(seconds: 5),
+      );
+    } catch (e) {
+      printError(info: 'resetDashboardState failed: $e');
+    }
     await _runStartupConnectionCheck(
       enableAutoDeploy: true,
       showFailureSnack: true,

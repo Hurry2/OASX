@@ -1,28 +1,29 @@
 part of 'api_client.dart';
 
-/// Client calls for the OAS `screenshot` API (`GET /screenshot/last`).
-///
-/// The backend overwrites a single file per config, so the same URL always
-/// resolves to the newest frame. Callers pass a cache buster to force a
-/// refetch instead of being served from the HTTP cache.
+/// Client calls for the OAS `screenshot` API.
 extension ApiClientScreenshotX on ApiClient {
-  /// Resolves the absolute URL of one config's latest screenshot.
+  /// Resolves the WebSocket endpoint that streams one config's live frames.
   ///
-  /// [cacheBuster] is appended as the `t` query parameter.
-  String buildLastScreenshotUrl(String instance, {int? cacheBuster}) {
+  /// The backend reads the frame the script registered into its image service,
+  /// so this never triggers a screenshot and can run alongside the script. Each
+  /// new frame arrives as a json metadata message followed by a binary JPEG.
+  ///
+  /// Built from scratch rather than via [Uri.replace] so no stray `?` is left
+  /// behind by an empty query, and so any query on the base address is dropped.
+  String buildLiveScreenshotWsUrl(String instance) {
     final base = Uri.parse(baseAddress);
-    return base
-        .replace(
-          pathSegments: [
-            ...base.pathSegments.where((segment) => segment.isNotEmpty),
-            'screenshot',
-            'last',
-          ],
-          queryParameters: {
-            'instance': instance.trim(),
-            if (cacheBuster != null) 't': '$cacheBuster',
-          },
-        )
-        .toString();
+    return Uri(
+      scheme: base.scheme == 'https' ? 'wss' : 'ws',
+      userInfo: base.userInfo.isEmpty ? null : base.userInfo,
+      host: base.host,
+      port: base.hasPort ? base.port : null,
+      pathSegments: [
+        ...base.pathSegments.where((segment) => segment.isNotEmpty),
+        'screenshot',
+        'live',
+        'ws',
+        instance.trim(),
+      ],
+    ).toString();
   }
 }

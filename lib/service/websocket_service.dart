@@ -66,10 +66,16 @@ class WebSocketService extends GetxService {
   }
 
   Future<void> closeAll() async {
-    for (final client in _clients.values) {
+    // 先取出快照并清空注册表，再逐个关闭。若直接遍历 _clients 边关边等：
+    // 关闭期间可能有新的 connect（例如预览面板正按新地址重连）往表里写，
+    // 会抛 ConcurrentModificationError 把调用方（切换后端地址前的状态重置）
+    // 整条流程带断；而末尾再 clear 又会把那些新建的连接一起抹掉，连接还开着
+    // 却再也关不掉。
+    final clients = _clients.values.toList();
+    _clients.clear();
+    for (final client in clients) {
       await client._close(WebSocketStatus.normalClosure, 'global close');
     }
-    _clients.clear();
     printInfo(info: 'ws all closed');
   }
 

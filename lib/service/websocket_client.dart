@@ -151,7 +151,11 @@ class WebSocketClient {
   Future<void> _close(int code, String reason, {bool reconnect = false}) async {
     _shouldReconnect = reconnect;
     try {
-      await _channel?.sink.close(code, reason);
+      // 超时保护：对端失联时 close 握手可能一直不返回。这里不设上限的话，
+      // 调用方（切换后端地址前的状态重置、预览面板的重连）会被永久挂住。
+      await _channel?.sink
+          .close(code, reason)
+          .timeout(const Duration(seconds: 2));
     } catch (e) {
       printError(info: e.toString());
     }
