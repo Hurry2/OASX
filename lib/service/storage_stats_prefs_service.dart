@@ -6,16 +6,16 @@ import 'package:get_storage/get_storage.dart';
 import 'package:oasx/modules/common/models/storage_key.dart';
 import 'package:oasx/modules/home/models/storage_stats_models.dart';
 
-/// Local preferences of the `纳物库` tab.
+/// Local preferences of the `监控` tab.
 ///
-/// Kept on the client on purpose: how much history to keep is a viewer-side
-/// concern, so the policy travels to OAS as cleanup request parameters instead
-/// of being written into the OAS config file. The view preferences below are
-/// purely presentational and never reach OAS at all.
+/// The cleanup retention policy is kept on the client on purpose: how much
+/// history to keep is a viewer-side concern, so it travels to OAS as cleanup
+/// request parameters instead of being written into the OAS config file. The
+/// view preferences below are purely presentational and never reach OAS at all.
 class StorageStatsPrefsService extends GetxService {
   final _storage = GetStorage();
 
-  /// Retention policy used by the cleanup dialog.
+  /// Retention policy used by the data cleanup dialog.
   final cleanupOptions = const StorageStatsCleanupOptions().obs;
 
   /// Whether the tab renders the `趋势` charts instead of the `列表` grid.

@@ -7,6 +7,7 @@ import 'package:oasx/modules/home/models/storage_stats_models.dart';
 import 'package:oasx/modules/home/widgets/statistics_formatters.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_cleanup_dialog.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_date_picker.dart';
+import 'package:oasx/modules/home/widgets/last_screenshot_panel.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_style.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_trend_panel.dart';
 import 'package:oasx/service/storage_stats_prefs_service.dart';
@@ -18,7 +19,7 @@ const _kStoragePanelSpacing = 12.0;
 const _kStorageResourceMinWidth = 104.0;
 const _kStorageResourceSpacing = 8.0;
 
-/// `纳物库` (storage) tab content for the active script.
+/// `监控` (monitor) tab content for the active script.
 ///
 /// Mirrors the log tab layout: one card holding a control row (the date
 /// selector on the left, actions on the right) above the scrolling content.
@@ -27,9 +28,13 @@ const _kStorageResourceSpacing = 8.0;
 /// The body has two views, toggled from the control row and remembered across
 /// sessions: the `列表` grid (one date, per-resource change vs the previous
 /// date) and the `趋势` charts (every stored date, one small line per resource).
+/// Below the grid sits the live emulator screenshot for this config.
 class StorageStatsPanel extends StatefulWidget {
   /// Creates the storage statistics panel.
-  const StorageStatsPanel({super.key});
+  const StorageStatsPanel({super.key, required this.scriptName});
+
+  /// Config name the backend keys every resource snapshot and frame by.
+  final String scriptName;
 
   @override
   State<StorageStatsPanel> createState() => _StorageStatsPanelState();
@@ -85,6 +90,8 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
                               day: day,
                             )),
               ),
+              const SizedBox(height: _kStoragePanelSpacing),
+              LastScreenshotPanel(scriptName: widget.scriptName),
             ],
           );
         }),
@@ -152,12 +159,13 @@ class _StorageStatsToolbar extends StatelessWidget {
     );
   }
 
-  /// Builds what sits on the left: the date selector in the list view, the
-  /// covered window in the trend view.
+  /// Builds what sits on the left: the date + snapshot-time selector in the list
+  /// view, the covered window in the trend view.
   ///
-  /// The instance is bound to the active config, so only the date is pickable.
-  /// The trend view charts every stored date at once, so a date selector there
-  /// would be a control that does nothing — it shows the covered range instead.
+  /// The instance is bound to the active config, so only the date and the
+  /// snapshot time are pickable. The trend view charts every stored date at
+  /// once, so a date selector there would be a control that does nothing — it
+  /// shows the covered range instead.
   Widget _leadingControls(BuildContext context) {
     final theme = Theme.of(context);
     if (prefs.trendViewEnabled.value) {
@@ -177,14 +185,22 @@ class _StorageStatsToolbar extends StatelessWidget {
     if (currentDay == null) {
       return const SizedBox.shrink();
     }
-    // `Align` hands the button loose constraints, so the pill hugs its label
-    // instead of being stretched by the surrounding `Expanded`.
+    // `Align` hands the controls loose constraints, so the pills hug their
+    // labels instead of being stretched by the surrounding `Expanded`.
     return Align(
       alignment: Alignment.centerLeft,
-      child: StorageStatsDateButton(
-        selected: currentDay.date,
-        dates: [for (final item in controller.days) item.date],
-        onSelected: controller.selectDate,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          StorageStatsDateButton(
+            selected: currentDay.date,
+            dates: controller.distinctDates,
+            onSelected: controller.selectDate,
+          ),
+          _SnapshotTimeDropdown(controller: controller),
+        ],
       ),
     );
   }
@@ -202,8 +218,7 @@ class _StorageStatsToolbar extends StatelessWidget {
     return '${formatStatisticsDayLabel(dates.last.date)} ~ $newest';
   }
 
-  /// Builds the view toggle, the cleanup, refresh actions and the error
-  /// indicator.
+  /// Builds the view toggle, refresh action and the error indicator.
   Widget _trailingControls(BuildContext context) {
     final loading =
         controller.instancesLoading.value || controller.seriesLoading.value;
@@ -268,7 +283,75 @@ class _StorageStatsToolbar extends StatelessWidget {
   }
 }
 
-/// Scrolling body of the storage tab.
+/// Snapshot-time selector for the selected date.
+///
+/// The date button picks the day; this picks which run within that day, since
+/// the backend keeps every run (several runs a day included). It reads the day's
+/// timestamps straight from the controller, so it needs no request of its own.
+class _SnapshotTimeDropdown extends StatelessWidget {
+  const _SnapshotTimeDropdown({required this.controller});
+
+  final HomeStorageStatsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Obx(() {
+      final timestamps = controller.timestampsForSelectedDate;
+      final selected = controller.selectedTimestamp.value;
+      final resolved = timestamps.contains(selected) ? selected : null;
+      return Tooltip(
+        message: I18n.storageStatsTime.tr,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: resolved,
+              isDense: true,
+              borderRadius: BorderRadius.circular(10),
+              hint: Text('--', style: theme.textTheme.labelLarge),
+              icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+              onChanged: timestamps.isEmpty
+                  ? null
+                  : (next) {
+                      if (next != null) {
+                        controller.selectTimestamp(next);
+                      }
+                    },
+              items: [
+                for (final stamp in timestamps)
+                  DropdownMenuItem<String>(
+                    value: stamp,
+                    child: Text(
+                      _timeLabel(stamp),
+                      style: theme.textTheme.labelLarge,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  /// `HH:MM:SS` from a `YYYY-MM-DD_HH-MM-SS` stamp; the date is already known.
+  String _timeLabel(String stamp) {
+    final timePart = stamp.contains('_') ? stamp.split('_').last : stamp;
+    return timePart.replaceAll('-', ':');
+  }
+}
+
+/// Scrolling body of the storage tab: just the resource grid.
+///
+/// The emulator screenshot is pinned to the bottom of the panel in
+/// [StorageStatsPanel], outside the scroll area, so it stays put while the
+/// grid scrolls and reads the cached frame on the first connect.
 class _StorageStatsContent extends StatelessWidget {
   const _StorageStatsContent({required this.controller, required this.day});
 
@@ -279,13 +362,49 @@ class _StorageStatsContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: EdgeInsets.zero,
-      children: [
-        _StorageResourceGrid(controller: controller, day: day),
-        const SizedBox(height: _kStoragePanelSpacing),
-        _StorageScreenshotCard(controller: controller, day: day),
-      ],
+      children: [_StorageResourceGrid(controller: controller, day: day)],
     );
   }
+}
+
+/// Renders a resource value, compacting large counts into the game's `万`/`亿`
+/// notation (two decimals) and falling back to the raw text when empty or
+/// non-numeric.
+String _formatResourceValue(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) {
+    return '--';
+  }
+  final parsed = parseStorageStatsValue(text);
+  return parsed == null ? text : formatStorageStatsValue(parsed);
+}
+
+/// Tooltip text for a compacted value: the exact original number, or `null`
+/// when the value is short enough that a tooltip would only repeat the label.
+String? _resourceTooltip(String raw, String displayed) {
+  if (!displayed.contains('万') && !displayed.contains('亿')) {
+    return null;
+  }
+  final text = raw.trim();
+  final parsed = parseStorageStatsValue(text);
+  if (parsed == null) {
+    return text.isEmpty ? null : text;
+  }
+  return _withThousandsSeparators(parsed.round());
+}
+
+/// Inserts thousands separators into an integer without pulling in intl.
+String _withThousandsSeparators(int value) {
+  final negative = value < 0;
+  final digits = value.abs().toString();
+  final buffer = StringBuffer(negative ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) {
+      buffer.write(',');
+    }
+    buffer.write(digits[i]);
+  }
+  return buffer.toString();
 }
 
 /// Resource value grid with a per-resource change indicator.
@@ -355,6 +474,14 @@ class _StorageResourceCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final style = StorageResourceStyle.resolve(name, scheme);
+    final displayValue = _formatResourceValue(value);
+    final valueTooltip = _resourceTooltip(value, displayValue);
+    final valueText = Text(
+      displayValue,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    );
     final currentDelta = delta;
     final deltaText = currentDelta == null
         ? ''
@@ -391,14 +518,9 @@ class _StorageResourceCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Text(
-                  value.trim().isEmpty ? '--' : value.trim(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: valueTooltip == null
+                    ? valueText
+                    : Tooltip(message: valueTooltip, child: valueText),
               ),
               if (deltaText.isNotEmpty && currentDelta != null) ...[
                 const SizedBox(width: 4),
@@ -408,160 +530,6 @@ class _StorageResourceCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Archived storage screenshot with a tap-to-zoom preview.
-class _StorageScreenshotCard extends StatelessWidget {
-  const _StorageScreenshotCard({required this.controller, required this.day});
-
-  final HomeStorageStatsController controller;
-  final StorageStatsDay day;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final imageUrl = controller.selectedImageUrl;
-    final capturedAt = _parseCapturedAt(day.timestamp);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.photo_library_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    I18n.storageStatsScreenshot.tr,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                ),
-                if (capturedAt != null)
-                  Text(
-                    formatStatisticsDateTime(capturedAt),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            if (imageUrl == null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text(I18n.storageStatsNoScreenshot.tr)),
-              )
-            else
-              _StorageScreenshotPreview(url: imageUrl),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Parses a backend timestamp such as `2026-10-06_14-19-02`.
-DateTime? _parseCapturedAt(String timestamp) {
-  final match = RegExp(
-    r'^(\d{4}-\d{2}-\d{2})[_\s](\d{2})-(\d{2})-(\d{2})$',
-  ).firstMatch(timestamp.trim());
-  if (match == null) {
-    return null;
-  }
-  return DateTime.tryParse(
-    '${match.group(1)} ${match.group(2)}:${match.group(3)}:${match.group(4)}',
-  );
-}
-
-/// Network preview of one storage screenshot with zoom support.
-class _StorageScreenshotPreview extends StatelessWidget {
-  const _StorageScreenshotPreview({required this.url});
-
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => _openFullscreen(context),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          url,
-          width: double.infinity,
-          fit: BoxFit.fitWidth,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) {
-              return child;
-            }
-            return const SizedBox(
-              height: 160,
-              child: Center(child: CircularProgressIndicator()),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return const SizedBox(
-              height: 120,
-              child: Center(child: Icon(Icons.broken_image_outlined)),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  /// Opens the screenshot in a zoomable full-screen dialog.
-  void _openFullscreen(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(24),
-          backgroundColor: Colors.transparent,
-          child: Stack(
-            children: [
-              InteractiveViewer(
-                maxScale: 5,
-                child: Image.network(
-                  url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const SizedBox(
-                      height: 160,
-                      child: Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Positioned(
-                top: 4,
-                right: 4,
-                child: IconButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

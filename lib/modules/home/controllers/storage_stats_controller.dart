@@ -5,12 +5,13 @@ import 'package:oasx/api/api_client.dart';
 import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/home/models/storage_stats_models.dart';
 
-/// Drives the `纳物库` (storage) tab of the active script workbench.
+/// Drives the `监控` (monitor) tab of the active script workbench.
 ///
-/// The backend exposes one snapshot per date for every config instance. The
-/// controller binds to the instance matching the active config, keeps the whole
-/// date series in memory so switching dates needs no extra request, and caches
-/// one binding per script so returning to the tab (or flipping between configs)
+/// The backend exposes one or more snapshots per date for every config instance
+/// (the script may run several times a day). The controller binds to the
+/// instance matching the active config, keeps the whole snapshot series in
+/// memory so switching date/timestamp needs no extra request, and caches one
+/// binding per script so returning to the tab (or flipping between configs)
 /// renders instantly instead of re-fetching.
 class HomeStorageStatsController extends GetxController {
   /// How long a cached binding is served without any request.
@@ -63,6 +64,9 @@ class HomeStorageStatsController extends GetxController {
   /// Date currently rendered.
   final selectedDate = ''.obs;
 
+  /// Snapshot timestamp chosen within [selectedDate]; '' shows the newest.
+  final selectedTimestamp = ''.obs;
+
   /// Instance currently rendered.
   ///
   /// Never user-selectable: it is auto-resolved from the active config, just
@@ -109,10 +113,21 @@ class HomeStorageStatsController extends GetxController {
   }
 
   /// Snapshot currently rendered, or `null` when nothing is selected.
+  ///
+  /// A timestamp within the date wins; otherwise the date's newest snapshot is
+  /// shown (days is newest first).
   StorageStatsDay? get selectedDay {
     final date = selectedDate.value;
     if (date.isEmpty) {
       return null;
+    }
+    final timestamp = selectedTimestamp.value;
+    if (timestamp.isNotEmpty) {
+      for (final day in days) {
+        if (day.date == date && day.timestamp == timestamp) {
+          return day;
+        }
+      }
     }
     for (final day in days) {
       if (day.date == date) {
@@ -120,6 +135,29 @@ class HomeStorageStatsController extends GetxController {
       }
     }
     return null;
+  }
+
+  /// Timestamps available under [selectedDate], newest first.
+  List<String> get timestampsForSelectedDate {
+    final date = selectedDate.value;
+    if (date.isEmpty) {
+      return const [];
+    }
+    return [
+      for (final day in days)
+        if (day.date == date) day.timestamp,
+    ];
+  }
+
+  /// Distinct dates that own at least one snapshot, newest first.
+  List<String> get distinctDates {
+    final ordered = <String>[];
+    for (final day in days) {
+      if (day.date.isNotEmpty && !ordered.contains(day.date)) {
+        ordered.add(day.date);
+      }
+    }
+    return ordered;
   }
 
   /// Snapshot captured right before the selected one, or `null`.
@@ -183,10 +221,10 @@ class HomeStorageStatsController extends GetxController {
 
   /// Builds the ascending-by-date trend of one resource.
   ///
-  /// [days] is newest first, so the series is reversed to read left to right on
-  /// a chart. A date whose snapshot holds no parsable value keeps its slot with
-  /// a `null` value, so the chart can break the line there instead of pretending
-  /// the resource was zero.
+  /// A date may hold several snapshots; only the newest one is charted. A date
+  /// whose newest snapshot holds no parsable value keeps its slot with a `null`
+  /// value, so the chart can break the line there instead of pretending the
+  /// resource was zero.
   ///
   /// [granularity] collapses the daily series into weeks or months; see
   /// [bucketTrendPoints] for which reading survives inside a bucket.
@@ -194,12 +232,21 @@ class HomeStorageStatsController extends GetxController {
     String resource, {
     StorageStatsTrendGranularity granularity = StorageStatsTrendGranularity.day,
   }) {
+    // One point per date: keep the newest snapshot of each day (days is newest
+    // first). A date whose newest snapshot holds no parsable value keeps its
+    // slot with a null so the chart can break the line there.
+    final latestByDate = <String, double?>{};
+    for (final day in days) {
+      if (day.date.isEmpty || latestByDate.containsKey(day.date)) {
+        continue;
+      }
+      latestByDate[day.date] = parseStorageStatsValue(day.data[resource]);
+    }
+    final ordered = latestByDate.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
     final daily = [
-      for (final day in days.reversed)
-        StorageStatsTrendPoint(
-          date: day.date,
-          value: parseStorageStatsValue(day.data[resource]),
-        ),
+      for (final entry in ordered)
+        StorageStatsTrendPoint(date: entry.key, value: entry.value),
     ];
     return bucketTrendPoints(daily, granularity);
   }
@@ -293,7 +340,8 @@ class HomeStorageStatsController extends GetxController {
     await _bootstrap(scriptName, preferredDate: selectedDate.value);
   }
 
-  /// Selects one date from the already loaded series.
+  /// Selects one date from the already loaded series, defaulting to its newest
+  /// snapshot.
   void selectDate(String date) {
     final normalized = date.trim();
     if (normalized.isEmpty ||
@@ -302,12 +350,46 @@ class HomeStorageStatsController extends GetxController {
       return;
     }
     selectedDate.value = normalized;
+    selectedTimestamp.value = _newestTimestampFor(normalized);
+  }
+
+  /// Selects one snapshot by its timestamp within the current date.
+  void selectTimestamp(String timestamp) {
+    final normalized = timestamp.trim();
+    if (normalized == selectedTimestamp.value) {
+      return;
+    }
+    if (normalized.isNotEmpty &&
+        !timestampsForSelectedDate.contains(normalized)) {
+      return;
+    }
+    selectedTimestamp.value = normalized;
+  }
+
+  /// Newest snapshot timestamp of [date], or '' when the date has none.
+  String _newestTimestampFor(String date) {
+    for (final day in days) {
+      if (day.date == date) {
+        return day.timestamp;
+      }
+    }
+    return '';
+  }
+
+  /// Keeps the current timestamp when it still belongs to [date], else newest.
+  String _resolveTimestamp(String date) {
+    final keep = selectedTimestamp.value;
+    if (keep.isNotEmpty &&
+        days.any((day) => day.date == date && day.timestamp == keep)) {
+      return keep;
+    }
+    return _newestTimestampFor(date);
   }
 
   /// Reloads the instance index and the bound instance series.
   ///
   /// Always goes to the network, so this is what the toolbar's refresh action
-  /// and the post-cleanup reload use.
+  /// uses.
   @override
   Future<void> refresh() async {
     await _bootstrap(
@@ -463,12 +545,15 @@ class HomeStorageStatsController extends GetxController {
       days.assignAll(series.days);
       if (days.isEmpty) {
         selectedDate.value = '';
+        selectedTimestamp.value = '';
         return;
       }
       final hasPreferred =
           preferredDate.isNotEmpty &&
           days.any((day) => day.date == preferredDate);
-      selectedDate.value = hasPreferred ? preferredDate : days.first.date;
+      final nextDate = hasPreferred ? preferredDate : days.first.date;
+      selectedDate.value = nextDate;
+      selectedTimestamp.value = _resolveTimestamp(nextDate);
     } catch (error) {
       if (!_isActive(revision) || _selectedInstance != instance) {
         return;
@@ -526,12 +611,15 @@ class HomeStorageStatsController extends GetxController {
     days.assignAll(binding.series.days);
     if (days.isEmpty) {
       selectedDate.value = '';
+      selectedTimestamp.value = '';
       return;
     }
     final hasPreferred =
         preferredDate.isNotEmpty &&
         days.any((day) => day.date == preferredDate);
-    selectedDate.value = hasPreferred ? preferredDate : days.first.date;
+    final nextDate = hasPreferred ? preferredDate : days.first.date;
+    selectedDate.value = nextDate;
+    selectedTimestamp.value = _resolveTimestamp(nextDate);
   }
 
   /// Re-fetches [scriptName] in the background when its cache outlived the TTL.

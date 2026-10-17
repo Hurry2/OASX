@@ -2,10 +2,8 @@ part of 'api_client.dart';
 
 /// Client calls for the OAS `纳物库` (storage) statistics API.
 ///
-/// Endpoints live under `/storage_stats`: they expose the last snapshot of each
-/// date for every config instance, plus the matching screenshot image. The
-/// single mutating endpoint is the cleanup, which is always confirmed with a
-/// dry run first.
+/// Endpoints live under `/storage_stats`: `/{instance}` returns every snapshot
+/// of one instance (same-day runs included), newest first.
 extension ApiClientStorageStatsX on ApiClient {
   /// Loads the instance index (`GET /storage_stats`).
   Future<StorageStatsInstanceList> getStorageStatsInstances() async {
@@ -18,7 +16,7 @@ extension ApiClientStorageStatsX on ApiClient {
     return StorageStatsInstanceList.fromJson(_storageStatsJsonMap(res.data));
   }
 
-  /// Loads every date of one instance (`GET /storage_stats/{instance}`).
+  /// Loads every snapshot of one instance (`GET /storage_stats/{instance}`).
   Future<StorageStatsSeries> getStorageStatsSeries(String instance) async {
     final normalized = instance.trim();
     if (normalized.isEmpty) {
@@ -52,7 +50,7 @@ extension ApiClientStorageStatsX on ApiClient {
         .toString();
   }
 
-  /// Previews or runs the cleanup (`POST /storage_stats/cleanup`).
+  /// Previews or runs the data cleanup (`POST /storage_stats/cleanup`).
   ///
   /// [dryRun] `true` only plans the deletion so the UI can show what would go;
   /// confirming sends the same options with `dryRun: false`. The backend always

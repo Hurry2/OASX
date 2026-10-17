@@ -8,7 +8,6 @@ import 'package:oasx/translation/i18n_content.dart';
 /// Retention presets offered by the cleanup dialog, in days.
 ///
 /// `0` means "keep forever" and always renders as the last entry.
-const List<int> _kImageKeepPresets = <int>[30, 60, 90, 180, 365, 0];
 const List<int> _kDataKeepPresets = <int>[0, 30, 90, 180, 365];
 const List<int> _kMinKeepPresets = <int>[0, 3, 7, 14, 30];
 
@@ -79,13 +78,6 @@ class _StorageCleanupDialogState extends State<_StorageCleanupDialog> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                _StorageCleanupDropdown(
-                  label: I18n.storageStatsCleanupImageKeep.tr,
-                  value: options.imageKeepDays,
-                  options: _daysOptions(_kImageKeepPresets),
-                  onChanged: (value) =>
-                      _applyOptions(options.copyWith(imageKeepDays: value)),
-                ),
                 _StorageCleanupDropdown(
                   label: I18n.storageStatsCleanupDataKeep.tr,
                   value: options.dataKeepDays,
@@ -204,27 +196,12 @@ class _StorageCleanupDialogState extends State<_StorageCleanupDialog> {
         style: theme.textTheme.bodySmall,
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          I18n.storageStatsCleanupSummary.trParams({
-            'files': '${report.totals.files}',
-            'size': formatStorageStatsBytes(report.totals.bytes),
-          }),
-          style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          I18n.storageStatsCleanupSummaryDetail.trParams({
-            'images': '${report.imageCount}',
-            'data': '${report.dataCount}',
-          }),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+    return Text(
+      I18n.storageStatsCleanupSummary.trParams({
+        'files': '${report.totals.files}',
+        'size': formatStorageStatsBytes(report.totals.bytes),
+      }),
+      style: theme.textTheme.bodyMedium,
     );
   }
 

@@ -59,7 +59,9 @@ class WorkbenchSidebarPanel extends StatelessWidget {
                   HomeWorkbenchTab.logs => LogCenterPanel(
                     scriptName: scriptName,
                   ),
-                  HomeWorkbenchTab.storageStats => const StorageStatsPanel(),
+                  HomeWorkbenchTab.storageStats => StorageStatsPanel(
+                    scriptName: scriptName,
+                  ),
                   _ => const SizedBox.shrink(),
                 },
               ),

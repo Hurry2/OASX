@@ -1,9 +1,10 @@
 // Models for the OAS `纳物库` (storage) statistics API (`/storage_stats`).
 //
 // The backend stores one snapshot per run under
-// `log/storage_stats/{instance}/{date}/{timestamp}.json` and exposes only the
-// last snapshot of each date. Values are free-form strings such as `2.11亿`,
-// `1.4万` or `36439`, so numeric parsing is best-effort.
+// `log/storage_stats/{instance}/{date}/{timestamp}.json` and exposes every
+// snapshot of a date (same-day runs included), newest first. Values are
+// free-form strings such as `2.11亿`, `1.4万` or `36439`, so numeric parsing is
+// best-effort.
 
 /// Resource keys OAS may still emit but the product no longer renders.
 ///
@@ -148,7 +149,8 @@ class StorageStatsDay {
   }
 }
 
-/// Response of `GET /storage_stats/{instance}`: every date, newest first.
+/// Response of `GET /storage_stats/{instance}`: every snapshot (same-day runs
+/// included), newest first.
 class StorageStatsSeries {
   /// Creates a series response.
   const StorageStatsSeries({required this.instance, required this.days});
@@ -156,7 +158,8 @@ class StorageStatsSeries {
   /// Instance the series belongs to.
   final String instance;
 
-  /// Day snapshots, newest first.
+  /// Every snapshot of the instance, newest first. A date can appear on more
+  /// than one entry when the script ran several times that day.
   final List<StorageStatsDay> days;
 
   /// Whether the instance owns no snapshot at all.
@@ -182,23 +185,20 @@ class StorageStatsSeries {
   }
 }
 
-/// Retention policy of the `纳物库` cleanup.
+/// Retention policy of the `监控` data cleanup.
 ///
 /// Owned by the client on purpose: the policy is a viewer-side concern, so it is
 /// persisted locally and sent to OAS as request parameters instead of being
-/// written into the OAS config file.
+/// written into the OAS config file. There is intentionally no screenshot
+/// retention — OAS no longer stores a per-snapshot image.
 class StorageStatsCleanupOptions {
   /// Creates a retention policy.
   const StorageStatsCleanupOptions({
-    this.imageKeepDays = 90,
     this.dataKeepDays = 0,
     this.weeklyKeepWeekday = 0,
     this.minKeepDays = 7,
-    this.dropSameDayRuns = true,
+    this.dropSameDayRuns = false,
   });
-
-  /// Screenshot retention in days; `0` keeps every screenshot.
-  final int imageKeepDays;
 
   /// Data retention in days (whole date dropped); `0` keeps everything.
   final int dataKeepDays;
@@ -210,13 +210,13 @@ class StorageStatsCleanupOptions {
   /// Recent days skipped entirely by the expiry and thinning rules.
   final int minKeepDays;
 
-  /// Whether every date keeps only its last run.
+  /// Whether every date keeps only its last run. Deletes *visible* runs (the
+  /// API returns every snapshot of a day now), so it defaults to off.
   final bool dropSameDayRuns;
 
   /// Serialises the policy into the cleanup request body.
   Map<String, dynamic> toJson() {
     return {
-      'image_keep_days': imageKeepDays,
       'data_keep_days': dataKeepDays,
       'weekly_keep_weekday': weeklyKeepWeekday,
       'min_keep_days': minKeepDays,
@@ -227,26 +227,23 @@ class StorageStatsCleanupOptions {
   /// Restores a policy previously persisted on the client.
   factory StorageStatsCleanupOptions.fromJson(Map<String, dynamic> json) {
     return StorageStatsCleanupOptions(
-      imageKeepDays: _asInt(json['image_keep_days'], 90),
       dataKeepDays: _asInt(json['data_keep_days'], 0),
       weeklyKeepWeekday: _asInt(json['weekly_keep_weekday'], 0),
       minKeepDays: _asInt(json['min_keep_days'], 7),
       dropSameDayRuns: json['drop_same_day_runs'] is bool
           ? json['drop_same_day_runs'] as bool
-          : true,
+          : false,
     );
   }
 
   /// Returns a copy with the given fields replaced.
   StorageStatsCleanupOptions copyWith({
-    int? imageKeepDays,
     int? dataKeepDays,
     int? weeklyKeepWeekday,
     int? minKeepDays,
     bool? dropSameDayRuns,
   }) {
     return StorageStatsCleanupOptions(
-      imageKeepDays: imageKeepDays ?? this.imageKeepDays,
       dataKeepDays: dataKeepDays ?? this.dataKeepDays,
       weeklyKeepWeekday: weeklyKeepWeekday ?? this.weeklyKeepWeekday,
       minKeepDays: minKeepDays ?? this.minKeepDays,
@@ -257,11 +254,8 @@ class StorageStatsCleanupOptions {
 
 /// Why one file is scheduled for deletion.
 enum StorageStatsCleanupReason {
-  /// An earlier run of a date the reader can never reach.
+  /// An earlier run of a date that the reader can now still reach.
   sameDayDuplicate('same_day_duplicate'),
-
-  /// Screenshot older than the screenshot retention window.
-  imageExpired('image_expired'),
 
   /// Data older than the data retention window.
   dataExpired('data_expired'),
@@ -272,9 +266,10 @@ enum StorageStatsCleanupReason {
   /// Reason the client does not know about.
   unknown('unknown');
 
+  /// Stable identifier used by the backend.
   const StorageStatsCleanupReason(this.wire);
 
-  /// Stable identifier used by the backend.
+  /// Wire token matched by [fromWire].
   final String wire;
 
   /// Resolves a backend reason string.
@@ -432,19 +427,6 @@ class StorageStatsCleanupReport {
   /// Files the backend failed to delete.
   final int failedCount;
 
-  /// Every scheduled deletion across all instances.
-  List<StorageStatsCleanupDeletion> get deletions => [
-    for (final item in instances) ...item.deletions,
-  ];
-
-  /// Screenshots scheduled for deletion.
-  int get imageCount =>
-      deletions.where((item) => item.isImage).toList(growable: false).length;
-
-  /// JSON payloads scheduled for deletion.
-  int get dataCount =>
-      deletions.where((item) => !item.isImage).toList(growable: false).length;
-
   /// Parses one cleanup report.
   factory StorageStatsCleanupReport.fromJson(Map<String, dynamic> json) {
     final rawInstances = json['instances'];
@@ -546,18 +528,18 @@ double? parseStorageStatsValue(String? raw) {
 
 /// Formats a number back into the game's compact notation.
 ///
-/// Values at or above `1e8` use `亿`, at or above `1e4` use `万`; everything
-/// else is rendered as a rounded integer.
+/// Values at or above `1e8` use `亿`, at or above `1e4` use `万`, both to two
+/// decimal places; everything else is rendered as a rounded integer.
 String formatStorageStatsValue(double value) {
   if (!value.isFinite) {
     return '-';
   }
   final magnitude = value.abs();
   if (magnitude >= 100000000) {
-    return '${_trimDecimal(value / 100000000)}亿';
+    return '${(value / 100000000).toStringAsFixed(2)}亿';
   }
   if (magnitude >= 10000) {
-    return '${_trimDecimal(value / 10000)}万';
+    return '${(value / 10000).toStringAsFixed(2)}万';
   }
   return value.round().toString();
 }
@@ -582,15 +564,6 @@ String formatStorageStatsBytes(int bytes) {
   }
   final text = unit == 0 ? value.round().toString() : value.toStringAsFixed(1);
   return '$text ${units[unit]}';
-}
-
-/// Formats `value` with at most two decimals and no trailing zeros.
-String _trimDecimal(double value) {
-  final text = value.toStringAsFixed(2);
-  if (!text.contains('.')) {
-    return text;
-  }
-  return text.replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
 /// One point of a resource trend: a snapshot date plus its parsed value.

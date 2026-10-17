@@ -172,7 +172,9 @@ class ActiveConfigPanel extends StatelessWidget {
       ),
       HomeWorkbenchTab.stats => const ScriptStatisticsPanel(),
       HomeWorkbenchTab.logs => LogCenterPanel(scriptName: script.name),
-      HomeWorkbenchTab.storageStats => const StorageStatsPanel(),
+      HomeWorkbenchTab.storageStats => StorageStatsPanel(
+        scriptName: script.name,
+      ),
     };
   }
 

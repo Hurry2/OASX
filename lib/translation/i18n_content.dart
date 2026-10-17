@@ -238,9 +238,9 @@ class I18n {
       storageStatsDateWeekdays = 'storage_stats_date_weekdays',
       storageStatsDatePrevMonth = 'storage_stats_date_prev_month',
       storageStatsDateNextMonth = 'storage_stats_date_next_month';
+  static const String storageStatsTime = 'storage_stats_time';
   static const String storageStatsCleanup = 'storage_stats_cleanup',
       storageStatsCleanupScope = 'storage_stats_cleanup_scope',
-      storageStatsCleanupImageKeep = 'storage_stats_cleanup_image_keep',
       storageStatsCleanupDataKeep = 'storage_stats_cleanup_data_keep',
       storageStatsCleanupWeekly = 'storage_stats_cleanup_weekly',
       storageStatsCleanupWeeklyOff = 'storage_stats_cleanup_weekly_off',
@@ -251,15 +251,13 @@ class I18n {
       storageStatsCleanupPreviewing = 'storage_stats_cleanup_previewing',
       storageStatsCleanupNothing = 'storage_stats_cleanup_nothing',
       storageStatsCleanupSummary = 'storage_stats_cleanup_summary',
-      storageStatsCleanupSummaryDetail = 'storage_stats_cleanup_summary_detail',
       storageStatsCleanupHint = 'storage_stats_cleanup_hint',
       storageStatsCleanupConfirm = 'storage_stats_cleanup_confirm',
       storageStatsCleanupCancel = 'storage_stats_cleanup_cancel',
       storageStatsCleanupDone = 'storage_stats_cleanup_done',
       storageStatsCleanupFailed = 'storage_stats_cleanup_failed';
-  static const String storageStatsScreenshot = 'storage_stats_screenshot',
-      storageStatsNoScreenshot = 'storage_stats_no_screenshot',
-      storageStatsComparePrevious = 'storage_stats_compare_previous',
+  static const String storageStatsComparePrevious =
+          'storage_stats_compare_previous',
       storageStatsInstanceMissing = 'storage_stats_instance_missing',
       storageStatsInstanceMissingHint = 'storage_stats_instance_missing_hint';
   static const String lastScreenshotTitle = 'last_screenshot_title',
