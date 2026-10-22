@@ -24,7 +24,12 @@ class WebSocketClient {
   bool _shouldReconnect = true;
   int _reconnectCount = 0;
   static const int maxReconnect = 3;
-  static const int maxReconnectAfterClosed = 2;
+
+  /// 连续快速重连失败后改用的间隔。
+  ///
+  /// 网络抖动（切换/关闭系统代理、睡眠唤醒、后端重启）只是短暂不可达，
+  /// 重连次数超标不能等同于"永久放弃"，否则只能重启 App 才能恢复。
+  static const Duration slowReconnectDelay = Duration(seconds: 15);
   final status = WsStatus.connecting.obs;
 
   Future<void> send(String data) async {
@@ -101,6 +106,9 @@ class WebSocketClient {
       _channel = WebSocketChannel.connect(Uri.parse(address));
       await _channel!.ready;
       status.value = WsStatus.connected;
+      // 连接成功后必须归零：原实现只在"彻底放弃"时清零，导致断线次数
+      // 在整条会话里累加，一次正常波动就可能撞上上限。
+      _reconnectCount = 0;
       printInfo(info: "ws[$name] connected!");
 
       _channel!.stream.listen(
@@ -165,6 +173,9 @@ class WebSocketClient {
   }
 
   Future<void> _reconnect() async {
+    // 只有显式关闭（用户停止脚本、切换后端地址、App 退出）才允许永久停止。
+    // 自动重连路径绝不能把 _shouldReconnect 置 false，否则一次网络抖动
+    // 就会让这个连接彻底失效，只能重启 App。
     if (!_shouldReconnect) {
       printInfo(info: "ws[$name] not should reconnect");
       status.value = WsStatus.closed;
@@ -176,27 +187,19 @@ class WebSocketClient {
       return;
     }
     _reconnectCount++;
-    if (_reconnectCount > maxReconnect) {
+    final bool fast = _reconnectCount <= maxReconnect;
+    if (_reconnectCount == maxReconnect + 1) {
       printError(
-          info: "ws[$name] reconnect failed more than $maxReconnect times");
-      if (status.value != WsStatus.closed) {
-        printError(info: 'ws[$name] try close and reconnect');
-        await _close(
-          WebSocketStatus.normalClosure,
-          'client try connect, but failed',
-        ).timeout(const Duration(seconds: 2), onTimeout: () => false);
-      }
-      status.value = WsStatus.closed;
-      if (_reconnectCount > maxReconnect + maxReconnectAfterClosed) {
-        _reconnectCount = 0;
-        printError(info: 'ws[$name] try reconnect after closed failed, finish');
-        return;
-      }
+        info: "ws[$name] reconnect failed more than $maxReconnect times, "
+            "switch to slow retry every ${slowReconnectDelay.inSeconds}s",
+      );
     }
     printInfo(info: "ws[$name] reconnecting... ($_reconnectCount)");
     status.value = WsStatus.reconnecting;
     Future.delayed(
-      Duration(seconds: _reconnectCount <= 1 ? 0 : 2),
+      fast
+          ? Duration(seconds: _reconnectCount <= 1 ? 0 : 2)
+          : slowReconnectDelay,
       () => _connect(),
     );
   }

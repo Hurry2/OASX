@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/gestures.dart';
@@ -22,8 +24,25 @@ import 'package:oasx/utils/platform_utils.dart';
 import 'package:oasx/routes.dart';
 import 'package:responsive_builder/responsive_builder.dart';
 
+/// 屏蔽系统代理对 OAS 后端连接的干扰。
+///
+/// OAS 后端跑在本机（默认 127.0.0.1:22267），本地回环绝不能走代理。
+/// 但第三方代理软件（游戏加速、抓包工具等）会把系统代理指向自己的端口，
+/// 关闭后端口失效，连接就变成"远程计算机拒绝网络连接"，App 侧表现为
+/// 一直连不上、只能重启。这里给所有 dart:io HttpClient 设成直连；
+/// 需要代理的功能（例如应用更新）会在创建后自行覆盖 findProxy。
+class _DirectConnectionOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    client.findProxy = (_) => 'DIRECT';
+    return client;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = _DirectConnectionOverrides();
   await initService();
 
   runApp(
