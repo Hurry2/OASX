@@ -35,6 +35,40 @@ List<String> applyCustomScriptOrder(
   return result;
 }
 
+/// Whether [customOrder] shares no name with [names].
+///
+/// A total mismatch means the stored order belongs to a different backend
+/// (another install, another config directory) — keeping it would make the
+/// sidebar silently fall back to the server order on every reload, which looks
+/// exactly like "my drag order was reset after restarting OAS".
+bool isScriptOrderStale(
+  Iterable<String> names,
+  Iterable<String> customOrder,
+) {
+  final source = <String>{};
+  for (final name in names) {
+    if (name.isNotEmpty) {
+      source.add(name);
+    }
+  }
+  if (source.isEmpty) {
+    return false;
+  }
+  var hasCustom = false;
+  for (final name in customOrder) {
+    if (name.isEmpty) {
+      continue;
+    }
+    hasCustom = true;
+    if (source.contains(name)) {
+      return false;
+    }
+  }
+  // Never stored an order yet (first run): not stale, let the caller build the
+  // default order instead of writing one here.
+  return hasCustom;
+}
+
 /// Maps a reorder performed on the *visible* list back onto the full order.
 ///
 /// [fullOrder] is every config in display order; [visibleOrder] is the subset

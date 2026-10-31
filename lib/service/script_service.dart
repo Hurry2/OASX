@@ -100,21 +100,35 @@ class ScriptService extends GetxService {
   }
 
   void syncScriptOrder(Iterable<String> scripts) {
+    final source = <String>[
+      for (final name in scripts)
+        if (name.trim().isNotEmpty) name.trim(),
+    ];
+    // 自定义顺序与当前后端配置名完全对不上，说明本地存的是另一套环境的顺序
+    // （换安装目录 / 换配置目录 / 换后端）。继续沿用会每次都退化成服务端原序，
+    // 表现就是"重启后拖动顺序被重置"，所以这里改用当前列表接管并落盘。
+    final staleOrder = isScriptOrderStale(source, _customScriptOrder);
     final normalized = applyCustomScriptOrder(
-      scripts.map((e) => e.trim()).where((e) => e.isNotEmpty),
-      _customScriptOrder,
+      source,
+      staleOrder ? const <String>[] : _customScriptOrder,
     );
     scriptOrderList.value = normalized;
+    if (staleOrder && normalized.isNotEmpty) {
+      _customScriptOrder
+        ..clear()
+        ..addAll(normalized);
+      _persistCustomScriptOrder();
+    }
     for (final name in normalized) {
       if (!scriptModelMap.containsKey(name)) {
         addScriptModel(name);
       }
     }
     final validSet = normalized.toSet();
-    final stale = scriptModelMap.keys
+    final removed = scriptModelMap.keys
         .where((e) => !validSet.contains(e))
         .toList();
-    for (final name in stale) {
+    for (final name in removed) {
       deleteScriptModel(name);
     }
   }
