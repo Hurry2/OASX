@@ -104,8 +104,9 @@ void _handleLogCenterScrollPosition(_LogCenterPanelState state) {
       position.maxScrollExtent - _LogCenterPanelState._bottomThreshold;
   controller.handleViewportPosition(isAtBottom: isAtBottom);
   _saveLogCenterViewport(state);
-  final linesBeforeViewport = _firstVisibleLogIndex(offset);
-  if (linesBeforeViewport <= _LogCenterPanelState._prefetchRemainingLines) {
+  final rowsBeforeViewport =
+      _firstVisibleLogRowIndex(controller, scrollController, offset);
+  if (rowsBeforeViewport <= _LogCenterPanelState._prefetchRemainingLines) {
     controller.prefetchOlder();
   }
 }
@@ -120,17 +121,58 @@ void _saveLogCenterViewport(_LogCenterPanelState state) {
     return;
   }
   final offset = scrollController.offset;
-  final index = _firstVisibleLogIndex(offset).clamp(0, controller.lines.length);
-  final anchorKey = index < controller.lines.length
-      ? controller.lines[index].key
-      : '';
-  final anchorDelta =
-      offset - index * _LogCenterPanelState._estimatedLineExtent;
+  final rows = controller.logRows;
+  final extent = _rowExtentFor(controller, scrollController);
+  final rowIndex =
+      _firstVisibleLogRowIndex(controller, scrollController, offset)
+          .clamp(0, rows.length);
+  final anchorKey =
+      rowIndex < rows.length ? _rowAnchorKey(controller, rows[rowIndex]) : '';
   controller.saveViewport(
     offset: offset,
     anchorKey: anchorKey,
-    anchorDelta: anchorDelta,
+    anchorDelta: offset - rowIndex * extent,
   );
+}
+
+/// Resolves the anchor log line key of one rendered row.
+String _rowAnchorKey(
+  ScriptLogBrowserController controller,
+  ScriptLogRow row,
+) {
+  final line = row.line;
+  if (line != null) {
+    return line.key;
+  }
+  final section = row.section;
+  if (section == null || section.firstIndex >= controller.lines.length) {
+    return '';
+  }
+  return controller.lines[section.firstIndex].key;
+}
+
+/// Best-effort extent of one rendered row, measured from the live geometry.
+///
+/// Collapsed task sections contribute a header instead of many lines, so a
+/// fixed per-line extent would misplace the viewport.
+double _rowExtentFor(
+  ScriptLogBrowserController? controller,
+  ScrollController scrollController,
+) {
+  if (controller == null || !scrollController.hasClients) {
+    return _LogCenterPanelState._estimatedLineExtent;
+  }
+  final rowCount = controller.logRows.length;
+  if (rowCount <= 0) {
+    return _LogCenterPanelState._estimatedLineExtent;
+  }
+  final position = scrollController.position;
+  final contentExtent = position.maxScrollExtent + position.viewportDimension;
+  if (contentExtent <= 0) {
+    return _LogCenterPanelState._estimatedLineExtent;
+  }
+  final extent = contentExtent / rowCount;
+  return extent > 1 ? extent : _LogCenterPanelState._estimatedLineExtent;
 }
 
 /// Scrolls the info log list to the current bottom after layout settles.
@@ -247,6 +289,9 @@ void _preserveLogCenterViewportAfterPrepend(
       ? scrollController.offset
       : 0.0;
   final delta = insertedCount * _LogCenterPanelState._estimatedLineExtent;
+  // 程序化跳转产生的滚动通知不能再次触发预取, 否则"旧内容折叠时视口推不动"
+  // 会让加载旧日志变成死循环。
+  _suppressLogCenterScrollHandling(state, frames: 3);
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!state.mounted || !scrollController.hasClients) {
       return;
@@ -260,9 +305,13 @@ void _preserveLogCenterViewportAfterPrepend(
   });
 }
 
-/// Estimates the first visible line index from scroll offset.
-int _firstVisibleLogIndex(double offset) {
-  return (offset / _LogCenterPanelState._estimatedLineExtent).floor();
+/// Estimates the first visible rendered row index from the scroll offset.
+int _firstVisibleLogRowIndex(
+  ScriptLogBrowserController? controller,
+  ScrollController scrollController,
+  double offset,
+) {
+  return (offset / _rowExtentFor(controller, scrollController)).floor();
 }
 
 /// Resolves one best-effort scroll target from the saved anchor state.
@@ -271,17 +320,23 @@ double _resolveLogCenterOffset(
   ScrollController scrollController, {
   required double fallbackOffset,
 }) {
+  final maxExtent = scrollController.position.maxScrollExtent;
   if (controller == null || controller.savedAnchorKey.isEmpty) {
-    return fallbackOffset.clamp(0.0, scrollController.position.maxScrollExtent);
+    return fallbackOffset.clamp(0.0, maxExtent);
   }
-  final anchorIndex = controller.lines.indexWhere(
-    (line) => line.key == controller.savedAnchorKey,
+  final rows = controller.logRows;
+  var rowIndex = rows.indexWhere(
+    (row) => row.line?.key == controller.savedAnchorKey,
   );
-  if (anchorIndex < 0) {
-    return fallbackOffset.clamp(0.0, scrollController.position.maxScrollExtent);
+  if (rowIndex < 0) {
+    rowIndex = rows.indexWhere(
+      (row) => _rowAnchorKey(controller, row) == controller.savedAnchorKey,
+    );
   }
-  final target =
-      anchorIndex * _LogCenterPanelState._estimatedLineExtent +
+  if (rowIndex < 0) {
+    return fallbackOffset.clamp(0.0, maxExtent);
+  }
+  final target = rowIndex * _rowExtentFor(controller, scrollController) +
       controller.savedAnchorDelta;
-  return target.clamp(0.0, scrollController.position.maxScrollExtent);
+  return target.clamp(0.0, maxExtent);
 }

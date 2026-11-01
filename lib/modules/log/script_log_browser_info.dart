@@ -11,7 +11,8 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
     try {
       final window = await ApiClient().getScriptLogWindow(
         scriptName,
-        limitLines: kAutoScrollLogWindowLineLimit,
+        limitLines: kLogWindowLoadLines,
+        limitBytes: kLogWindowLoadBytes,
       );
       if (!isInfoLoadActive(requestId)) {
         return;
@@ -30,14 +31,21 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
       infoError.value = error.toString();
       streamStatus.value = ScriptLogStreamStatus.error;
     } finally {
+      // 同上: 必须无条件清掉本轮的 loading 标志。
       if (_infoLoadRequestId == requestId) {
         _infoLoadRequestId = 0;
+        infoLoading.value = false;
       }
     }
   }
 
   /// Loads older lines before the current first line.
   Future<void> prefetchOlder() async {
+    // 打开任务时不预取: 任务视图最多只显示最后 kLogTaskMaxLines 行, 预取来的
+    // 旧日志进不了这个视图, 却会让窗口不断变长 —— 回到卡片列表就会多出一堆卡片。
+    if (isLogTaskOpened) {
+      return;
+    }
     final cursor = olderCursor;
     if (cursor == null || cursor.isEmpty || reachedStart) {
       return;
@@ -52,23 +60,25 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
       final window = await ApiClient().getScriptLogWindow(
         scriptName,
         cursor: cursor,
-        limitLines: kAutoScrollLogWindowLineLimit,
+        limitLines: kLogWindowLoadLines,
+        limitBytes: kLogWindowLoadBytes,
       );
       if (isOlderLoadActive(requestId)) {
         prependOlderWindow(window);
         syncWindowLimitForMode();
-        trimToLiveWindow();
+        // 刚拉回来的旧内容不能被立刻裁掉(否则这次请求等于白做, 还会再触发预取)。
+        trimToLiveWindow(keepOlder: true);
       }
     } catch (error) {
       if (isOlderLoadActive(requestId)) {
         infoError.value = error.toString();
       }
     } finally {
-      if (isOlderLoadActive(requestId)) {
-        olderLoading.value = false;
-      }
+      // 无条件清掉"本轮"的 loading: revision 在请求飞行中被刷新时
+      // isOlderLoadActive 会永久为假, 旧写法会把进度条一直留在界面上。
       if (_olderLoadRequestId == requestId) {
         _olderLoadRequestId = 0;
+        olderLoading.value = false;
       }
     }
   }

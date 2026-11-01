@@ -74,10 +74,11 @@ class ConfigWorkbench extends StatelessWidget {
             ? () => _showScriptListPage(context)
             : null,
       ),
-      sidebar: Obx(() {
+      sidebarBuilder: (onCollapse) => Obx(() {
         return WorkbenchSidebarPanel(
           controller: controller,
           scriptName: controller.activeScriptName.value,
+          onCollapse: onCollapse,
         );
       }),
     );

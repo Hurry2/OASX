@@ -14,6 +14,7 @@ class WorkbenchSidebarPanel extends StatelessWidget {
     super.key,
     required this.controller,
     required this.scriptName,
+    required this.onCollapse,
   });
 
   /// Dashboard controller that owns sidebar tab state.
@@ -21,6 +22,9 @@ class WorkbenchSidebarPanel extends StatelessWidget {
 
   /// Active script rendered by the sidebar.
   final String scriptName;
+
+  /// Collapses this sidebar so the workbench pane gets the full width.
+  final VoidCallback onCollapse;
 
   @override
   Widget build(BuildContext context) {
@@ -37,20 +41,37 @@ class WorkbenchSidebarPanel extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: tabs
-                    .map(
-                      (tab) => ChoiceChip(
-                        label: Text(_tabLabel(tab)),
-                        showCheckmark: false,
-                        selected: currentTab == tab,
-                        onSelected: (_) =>
-                            controller.setActiveWorkbenchSidebarTabValue(tab),
-                      ),
-                    )
-                    .toList(),
+              Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: tabs
+                          .map(
+                            (tab) => ChoiceChip(
+                              label: Text(_tabLabel(tab)),
+                              showCheckmark: false,
+                              selected: currentTab == tab,
+                              onSelected: (_) => controller
+                                  .setActiveWorkbenchSidebarTabValue(tab),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    key: const ValueKey<String>(
+                      'home-workbench-collapse-right-sidebar',
+                    ),
+                    tooltip: I18n.homeCollapseSidebar.tr,
+                    onPressed: onCollapse,
+                    icon: const Icon(
+                      Icons.keyboard_double_arrow_right_rounded,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Expanded(

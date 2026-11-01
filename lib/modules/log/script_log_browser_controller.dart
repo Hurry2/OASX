@@ -22,15 +22,30 @@ part 'script_log_browser_error_detail_render.dart';
 part 'script_log_browser_errors.dart';
 part 'script_log_browser_error_render.dart';
 part 'script_log_browser_info.dart';
+part 'script_log_browser_sections.dart';
 part 'script_log_browser_state.dart';
 part 'script_log_browser_stream.dart';
 part 'script_log_browser_window.dart';
 
-/// Log window line count used for live-following mode.
-const int kAutoScrollLogWindowLineLimit = 100;
+/// Lines requested for one info-log window load.
+///
+/// 1000 lines is the budget the info view works with: the card list covers the
+/// tasks inside that window, and a single longer task keeps its newest lines.
+const int kLogWindowLoadLines = 1000;
 
-/// Log window line count used for manual review mode.
-const int kManualScrollLogWindowLineLimit = 300;
+/// Bytes requested for one info-log window load.
+///
+/// Kept above what 1000 lines usually need so the line count caps first.
+const int kLogWindowLoadBytes = 4194304;
+
+/// Retained line count while following the live tail.
+const int kAutoScrollLogWindowLineLimit = 1000;
+
+/// Retained line count while browsing history.
+const int kManualScrollLogWindowLineLimit = 1000;
+
+/// Maximum lines kept for one opened task; longer tasks keep only their tail.
+const int kLogTaskMaxLines = 1000;
 
 /// Script-scoped log browser controller.
 class ScriptLogBrowserController extends GetxController {
@@ -90,6 +105,9 @@ class ScriptLogBrowserController extends GetxController {
 
   /// Image download keys currently running.
   final downloadingImageKeys = <String>[].obs;
+
+  /// Whether the selected error report Markdown is being saved.
+  final downloadingErrorReport = false.obs;
 
   /// Whether the error detail page is visible.
   final errorDetailVisible = false.obs;
@@ -181,8 +199,25 @@ class ScriptLogBrowserController extends GetxController {
   /// Maximum lines retained in the current visible info window.
   int retainedLogLineLimit = kAutoScrollLogWindowLineLimit;
 
+  /// Task section currently opened in the info log view ('' = card list).
+  final selectedLogTaskKey = ''.obs;
+
+  /// Display label of the opened task, kept even when its section stops
+  /// resolving so the sub-view never falls back on its own.
+  final openedLogTaskLabel = ''.obs;
+
+  /// Snapshot of the opened task's lines, taken when the task was opened.
+  final openedLogTaskLines = <ScriptLogLine>[].obs;
+
   /// Returns whether info view should reload latest logs on the next activate.
   bool get shouldRefreshLatestOnInfoResume => _shouldRefreshLatestOnInfoResume;
+
+  @override
+  void onInit() {
+    // 打开的活任务会持续追加新行, 需要跟着刷新快照。
+    ever(lines, (_) => refreshOpenedLogTask());
+    super.onInit();
+  }
 
   @override
   void onClose() {

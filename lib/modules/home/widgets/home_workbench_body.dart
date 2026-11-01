@@ -10,7 +10,7 @@ class HomeWorkbenchBody extends StatefulWidget {
     required this.controller,
     required this.collectionBuilder,
     required this.detailsBuilder,
-    required this.sidebar,
+    required this.sidebarBuilder,
   });
 
   /// Home dashboard controller providing persisted split state.
@@ -25,8 +25,8 @@ class HomeWorkbenchBody extends StatefulWidget {
     VoidCallback? onExpandRightSidebar,
   ) detailsBuilder;
 
-  /// Right sidebar widget reused in three-pane mode.
-  final Widget sidebar;
+  /// Builds the right sidebar pane and provides its collapse action.
+  final Widget Function(VoidCallback onCollapse) sidebarBuilder;
 
   @override
   State<HomeWorkbenchBody> createState() => _HomeWorkbenchBodyState();
@@ -71,6 +71,14 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
 
   /// Tracks whether releasing the pointer should commit the collapse.
   bool _collapseOnRelease = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 记住的「右栏已收起」在启动时直接生效, 不设 _forcedTwoPaneWidth,
+    // 这样窗口/左栏尺寸变化不会把它自动展开。
+    _forceTwoPane = widget.controller.workbenchSidebarCollapsed.value;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +163,7 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
           SizedBox(
             width: layout.logWidth,
             child: _buildPaneFrame(
-              child: widget.sidebar,
+              child: widget.sidebarBuilder(_handleRightSidebarCollapse),
               highlighted:
                   _pendingCollapseSide == HomeWorkbenchCollapseSide.logs,
               progress: _pendingCollapseProgress,
@@ -208,6 +216,7 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
         _forcedTwoPaneWidth = null;
         _forcedTwoPaneCollectionWidth = null;
       });
+      widget.controller.setWorkbenchSidebarCollapsed(false);
     });
   }
 
@@ -328,6 +337,20 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
       _pendingCollapseProgress = 0;
       _collapseOnRelease = false;
     });
+    widget.controller.setWorkbenchSidebarCollapsed(_forceTwoPane);
+  }
+
+  /// Collapses the desktop right sidebar and remembers the choice.
+  void _handleRightSidebarCollapse() {
+    if (_forceTwoPane || !mounted) {
+      return;
+    }
+    setState(() {
+      _forceTwoPane = true;
+      _forcedTwoPaneWidth = null;
+      _forcedTwoPaneCollectionWidth = null;
+    });
+    widget.controller.setWorkbenchSidebarCollapsed(true);
   }
 
   /// Restores the desktop right sidebar without changing window width.
@@ -340,6 +363,7 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
       _forcedTwoPaneWidth = null;
       _forcedTwoPaneCollectionWidth = null;
     });
+    widget.controller.setWorkbenchSidebarCollapsed(false);
   }
 
   /// Builds a subtle pane highlight while a collapse is pending.

@@ -126,7 +126,7 @@ class ScriptErrorLogText {
   /// Builds error text from JSON.
   factory ScriptErrorLogText.fromJson(Map<String, dynamic>? json) {
     return ScriptErrorLogText(
-      fileName: json?['file_name']?.toString() ?? 'log.txt',
+      fileName: json?['file_name']?.toString() ?? 'report.md',
       content: json?['content']?.toString() ?? '',
       size: _readInt(json?['size']) ?? 0,
       limitBytes: _readInt(json?['limit_bytes']) ?? 0,

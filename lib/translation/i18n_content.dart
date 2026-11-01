@@ -171,7 +171,8 @@ class I18n {
   static const String homeSortByStatus = 'home_sort_by_status',
       homeSortByName = 'home_sort_by_name',
       homeNoScriptSelected = 'home_no_script_selected',
-      homeRestoreSidebar = 'home_restore_sidebar';
+      homeRestoreSidebar = 'home_restore_sidebar',
+      homeCollapseSidebar = 'home_collapse_sidebar';
   static const String homeStatusTab = 'home_status_tab',
       homeTasksTab = 'home_tasks_tab',
       homeParamsTab = 'home_params_tab';
@@ -312,7 +313,13 @@ class I18n {
       homeLogDownloadImage = 'home_log_download_image',
       homeLogImageSaveSuccess = 'home_log_image_save_success',
       homeLogImageSaveFailed = 'home_log_image_save_failed',
-      homeLogScrollToBottom = 'home_log_scroll_to_bottom';
+      homeLogDownloadReport = 'home_log_download_report',
+      homeLogReportSaveSuccess = 'home_log_report_save_success',
+      homeLogReportSaveFailed = 'home_log_report_save_failed',
+      homeLogScrollToBottom = 'home_log_scroll_to_bottom',
+      homeLogSectionUnknown = 'home_log_section_unknown',
+      homeLogSectionLines = 'home_log_section_lines',
+      homeLogTaskFailed = 'home_log_task_failed';
   static const String taskManage = 'task_manage',
       taskManageTitle = 'task_manage_title',
       taskSearchHint = 'task_search_hint';

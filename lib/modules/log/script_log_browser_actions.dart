@@ -16,8 +16,16 @@ extension ScriptLogBrowserActionsX on ScriptLogBrowserController {
       return;
     }
     if (_shouldRefreshLatestOnInfoResume) {
-      unawaited(refreshLatest());
-      return;
+      if (isLogTaskOpened) {
+        // 打开着某个任务时同样不能重载窗口, 否则会把它顶掉。
+        _shouldRefreshLatestOnInfoResume = false;
+      } else {
+        // 重载会把窗口换成最新的一份。先把上一轮残留清掉, 否则会先用旧窗口渲染一屏
+        // (上次浏览滑到很旧的位置时里面有十几个任务边界 → 看起来"先加载满、再变回两个")。
+        clearInfoLogs();
+        unawaited(refreshLatest());
+        return;
+      }
     }
     if (autoScroll.value) {
       trimToLiveWindow();
@@ -47,6 +55,11 @@ extension ScriptLogBrowserActionsX on ScriptLogBrowserController {
   void enableAutoScroll() {
     if (!autoScroll.value) {
       autoScroll.value = true;
+    }
+    // 正在看某个任务的日志时不能重载最新窗口: 那会把正在读的行换掉,
+    // 于是打开的任务消失、界面退回卡片列表（"往下滚动就退出子界面"的根因）。
+    if (!shouldReloadLatestOnFollow) {
+      return;
     }
     unawaited(refreshLatest());
   }

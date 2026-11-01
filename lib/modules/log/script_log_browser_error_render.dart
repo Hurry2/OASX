@@ -24,9 +24,51 @@ class ScriptErrorLogRenderPayload {
   final int maxWidthScore;
 }
 
+/// Heading that owns the log fence inside a generated error report.
+const String _errorReportLogHeading = '## 日志';
+
+/// Extracts the log body from a generated error report.
+///
+/// Legacy plain-text logs are returned unchanged, so the error view keeps
+/// rendering exactly what it rendered before the report format existed.
+String extractErrorReportLog(String content) {
+  if (!content.contains(_errorReportLogHeading)) {
+    return content;
+  }
+  final lines = const LineSplitter().convert(content);
+  var headingIndex = -1;
+  for (var index = 0; index < lines.length; index++) {
+    if (lines[index].trimRight() == _errorReportLogHeading) {
+      headingIndex = index;
+      break;
+    }
+  }
+  if (headingIndex < 0) {
+    return content;
+  }
+  var fenceIndex = -1;
+  for (var index = headingIndex + 1; index < lines.length; index++) {
+    if (lines[index].trimRight().startsWith('```')) {
+      fenceIndex = index;
+      break;
+    }
+  }
+  if (fenceIndex < 0) {
+    return content;
+  }
+  final body = <String>[];
+  for (var index = fenceIndex + 1; index < lines.length; index++) {
+    if (lines[index].trimRight() == '```') {
+      break;
+    }
+    body.add(lines[index]);
+  }
+  return body.join('\n');
+}
+
 /// Parses raw error log text into virtual-rendering payload.
 ScriptErrorLogRenderPayload parseScriptErrorLogPayload(String content) {
-  final normalized = _trimErrorLogTrailingBreaks(content);
+  final normalized = _trimErrorLogTrailingBreaks(extractErrorReportLog(content));
   if (normalized.isEmpty) {
     return const ScriptErrorLogRenderPayload(lines: <String>[], maxWidthScore: 0);
   }

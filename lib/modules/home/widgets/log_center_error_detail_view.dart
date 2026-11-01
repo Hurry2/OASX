@@ -73,8 +73,37 @@ class LogCenterErrorDetailView extends StatelessWidget {
     return IconButton(
       tooltip: I18n.homeLogScrollToBottom.tr,
       onPressed: _scrollDetailToBottom,
-      icon: const Icon(Icons.vertical_align_bottom_rounded),
+      icon: const Icon(Icons.keyboard_double_arrow_down_rounded),
     );
+  }
+
+  /// Builds the header actions shared by the selected error report.
+  Widget _buildHeaderActions() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildDownloadReportButton(),
+        const SizedBox(width: 8),
+        _buildScrollToBottomButton(),
+      ],
+    );
+  }
+
+  /// Builds the action that saves the full error report Markdown.
+  Widget _buildDownloadReportButton() {
+    return Obx(() {
+      final loading = controller.downloadingErrorReport.value;
+      return IconButton(
+        tooltip: I18n.homeLogDownloadReport.tr,
+        onPressed: loading ? null : controller.downloadErrorReport,
+        icon: loading
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.save_alt_rounded),
+      );
+    });
   }
 
   /// Builds the image strip for the selected error detail.
@@ -116,7 +145,7 @@ class LogCenterErrorDetailView extends StatelessWidget {
             child: _buildHeader(
               context,
               title,
-              trailing: _buildScrollToBottomButton(),
+              trailing: _buildHeaderActions(),
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),

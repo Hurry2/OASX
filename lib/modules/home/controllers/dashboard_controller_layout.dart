@@ -34,4 +34,19 @@ extension HomeDashboardLayoutX on HomeDashboardController {
     workbenchSplitRatio.value = normalized;
     _storage.write(StorageKey.homeWorkbenchSplitRatio.name, normalized);
   }
+
+  /// Returns the persisted right sidebar collapse state.
+  void _loadWorkbenchSidebarCollapsed() {
+    workbenchSidebarCollapsed.value =
+        _storage.read(StorageKey.homeWorkbenchSidebarCollapsed.name) == true;
+  }
+
+  /// Persists whether the desktop right sidebar is collapsed.
+  void setWorkbenchSidebarCollapsed(bool value) {
+    if (workbenchSidebarCollapsed.value == value) {
+      return;
+    }
+    workbenchSidebarCollapsed.value = value;
+    _storage.write(StorageKey.homeWorkbenchSidebarCollapsed.name, value);
+  }
 }

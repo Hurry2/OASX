@@ -227,6 +227,62 @@ extension ScriptLogBrowserErrorsX on ScriptLogBrowserController {
     }
   }
 
+  /// Downloads the selected error report as a Markdown file.
+  Future<void> downloadErrorReport() async {
+    final detail = selectedErrorDetail.value;
+    if (detail == null || downloadingErrorReport.value) {
+      return;
+    }
+    final content = detail.log.content;
+    if (content.trim().isEmpty) {
+      Get.snackbar(
+        I18n.tip.tr,
+        I18n.homeLogReportSaveFailed.tr,
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    downloadingErrorReport.value = true;
+    final fileName = 'oasx-error-${detail.timestampMs}.md';
+    final bytes = Uint8List.fromList(utf8.encode(content));
+    try {
+      if (kIsWeb) {
+        await downloadBytesToBrowser(bytes, fileName, mimeType: 'text/markdown');
+        Get.snackbar(
+          I18n.tip.tr,
+          I18n.homeLogReportSaveSuccess.tr,
+          duration: const Duration(seconds: 1),
+        );
+        return;
+      }
+      final path = await FilePicker.platform.saveFile(
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['md'],
+        bytes: bytes,
+      );
+      if (path == null || path.trim().isEmpty) {
+        return;
+      }
+      if (!_isMobileTargetPlatform()) {
+        await saveBytesToPath(path, bytes);
+      }
+      Get.snackbar(
+        I18n.tip.tr,
+        I18n.homeLogReportSaveSuccess.tr,
+        duration: const Duration(seconds: 1),
+      );
+    } catch (_) {
+      Get.snackbar(
+        I18n.tip.tr,
+        I18n.homeLogReportSaveFailed.tr,
+        duration: const Duration(seconds: 2),
+      );
+    } finally {
+      downloadingErrorReport.value = false;
+    }
+  }
+
   /// Returns whether the current runtime target is mobile.
   bool _isMobileTargetPlatform() {
     return defaultTargetPlatform == TargetPlatform.android ||

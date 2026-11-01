@@ -60,6 +60,8 @@ class ScriptLogLine {
     required this.byteLength,
     required this.text,
     required this.lineTruncated,
+    this.task,
+    this.taskStart = false,
   });
 
   /// Log file name.
@@ -80,6 +82,12 @@ class ScriptLogLine {
   /// Whether display text was truncated.
   final bool lineTruncated;
 
+  /// Chinese task name owning this line, or null before the first banner.
+  final String? task;
+
+  /// Whether this line starts a task banner.
+  final bool taskStart;
+
   /// Stable key used for anchors and duplicate prevention.
   String get key => '$fileName:$lineNo:$offset';
 
@@ -92,6 +100,8 @@ class ScriptLogLine {
       byteLength: _readInt(json['byte_length']) ?? 0,
       text: json['text']?.toString() ?? '',
       lineTruncated: json['line_truncated'] == true,
+      task: json['task'] as String?,
+      taskStart: json['task_start'] == true,
     );
   }
 }

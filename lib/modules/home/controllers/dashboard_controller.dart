@@ -133,6 +133,7 @@ class HomeDashboardController extends GetxController {
   final workbenchPage = HomeWorkbenchPage.scripts.obs;
   final workbenchCollectionWidth = kHomeWorkbenchDefaultCollectionWidth.obs;
   final workbenchSplitRatio = kHomeWorkbenchDefaultSplitRatio.obs;
+  final workbenchSidebarCollapsed = false.obs;
   final workbenchLayoutMode = HomeWorkbenchLayoutMode.singlePane.obs;
   final activeWorkbenchTab = HomeWorkbenchTab.status.obs;
   final _lastPrimaryWorkbenchTab = HomeWorkbenchTab.status.obs;
@@ -151,6 +152,7 @@ class HomeDashboardController extends GetxController {
     _loadSelection();
     _loadWorkbenchCollectionWidth();
     _loadWorkbenchSplitRatio();
+    _loadWorkbenchSidebarCollapsed();
     syncWorkspaceState();
     _workspaceSyncWorker = everAll(
       [_scriptService.scriptOrderList, _scriptService.scriptModelMap],

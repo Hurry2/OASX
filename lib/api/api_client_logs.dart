@@ -86,7 +86,7 @@ extension ApiClientLogsX on ApiClient {
   /// Loads one error log detail by id.
   Future<ScriptErrorLogDetail> getScriptErrorLogDetail(
     String errorId, {
-    int logLimitBytes = 262144,
+    int logLimitBytes = 4194304,
   }) async {
     final res = await request(
       () => get(

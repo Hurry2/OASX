@@ -21,6 +21,7 @@ enum StorageKey {
   homeControlScriptList,
   homeWorkbenchCollectionWidth,
   homeWorkbenchSplitRatio,
+  homeWorkbenchSidebarCollapsed,
   autoDeploy,
   storageStatsCleanup,
   storageStatsTrendView,

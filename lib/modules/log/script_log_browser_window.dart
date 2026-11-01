@@ -16,14 +16,21 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
   }
 
   /// Releases excessive history before returning to live tail.
-  void trimToLiveWindow() {
-    if (lines.length <= retainedLogLineLimit) {
+  ///
+  /// While a task log is open nothing is trimmed: a section's identity is its
+  /// first line, so dropping that line would make the opened task unresolvable
+  /// and throw the view back to the card list.
+  ///
+  /// [keepOlder] is used right after older history was prepended: the user asked
+  /// for that content, so the newest lines are dropped instead of the new page.
+  void trimToLiveWindow({bool keepOlder = false}) {
+    if (isLogTaskOpened || lines.length <= retainedLogLineLimit) {
       return;
     }
-    if (autoScroll.value) {
-      _trimOldestLines();
-    } else {
+    if (keepOlder || !autoScroll.value) {
       _trimNewestLines();
+    } else {
+      _trimOldestLines();
     }
     _recomputeMaxLineWidthScore();
   }
