@@ -7,14 +7,52 @@ import 'package:oasx/modules/click_statistics/models/click_statistics_models.dar
 import 'package:oasx/modules/common/widgets/appbar.dart';
 
 class ClickStatisticsView extends GetView<ClickStatisticsController> {
-  const ClickStatisticsView({super.key});
+  ClickStatisticsView({super.key, this.embedded = false});
 
-  final GlobalKey _heatmapKey = const GlobalObjectKey(
-    'click-statistics-heatmap',
-  );
+  /// Whether the view is hosted inside a panel (right sidebar) instead of a route.
+  final bool embedded;
+
+  /// Per-instance heatmap anchor: the route page and the embedded panel can be
+  /// alive at the same time, and a shared GlobalKey would be a duplicate.
+  final GlobalKey _heatmapKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
+    final body = Obx(() {
+      // 内嵌时实例由左侧决定, 没有实例列表可等, 只能看日期/任务/记录的状态。
+      if (embedded) {
+        return _buildEmbeddedState(context);
+      }
+
+      if (controller.configs.isEmpty) {
+        if (controller.isLoadingConfigs.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (controller.errorMessage.value.isNotEmpty) {
+          return _buildError(context);
+        }
+
+        return _buildEmpty(context, '暂无点击统计记录');
+      }
+
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final desktop = constraints.maxWidth >= 900;
+
+          if (desktop) {
+            return _buildDesktop(context);
+          }
+
+          return _buildMobile(context);
+        },
+      );
+    });
+
+    if (embedded) {
+      return body;
+    }
+
     return Scaffold(
       appBar: buildPlatformAppBar(
         context,
@@ -27,32 +65,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           ),
         ],
       ),
-      body: Obx(() {
-        if (controller.isLoadingConfigs.value && controller.configs.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (controller.errorMessage.value.isNotEmpty &&
-            controller.configs.isEmpty) {
-          return _buildError(context);
-        }
-
-        if (controller.configs.isEmpty) {
-          return _buildEmpty(context, '暂无点击统计记录');
-        }
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 900;
-
-            if (desktop) {
-              return _buildDesktop(context);
-            }
-
-            return _buildMobile(context);
-          },
-        );
-      }),
+      body: body,
     );
   }
 
@@ -125,6 +138,134 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
     );
   }
 
+  // ===========================================================================
+  // Embedded (desktop right sidebar)
+  // ===========================================================================
+
+  /// Embedded loading / error / empty state (there is no instance list to wait for).
+  Widget _buildEmbeddedState(BuildContext context) {
+    if (controller.dates.isNotEmpty) {
+      return _buildEmbedded(context);
+    }
+
+    final loading =
+        controller.isLoadingDates.value ||
+        controller.isLoadingTasks.value ||
+        controller.isLoadingSessions.value;
+
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (controller.errorMessage.value.isNotEmpty) {
+      return _buildError(context);
+    }
+
+    return _buildEmpty(context, '暂无点击统计记录');
+  }
+
+  /// Compact layout for the sidebar: filters and runs on top, detail fills the rest.
+  ///
+  /// The sidebar is tall but narrow, so the mobile layout's full-height run list and
+  /// fixed 700px detail panel would force a lot of scrolling. Here the runs become a
+  /// horizontal chip strip and the heatmap absorbs every remaining pixel.
+  Widget _buildEmbedded(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              // 实例跟随左侧选中的配置, 这里只留日期 + 任务。
+              Expanded(child: _buildDateDropdown(context)),
+              const SizedBox(width: 6),
+              Expanded(child: _buildTaskDropdown(context)),
+              IconButton(
+                tooltip: '刷新',
+                onPressed: controller.refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _buildEmbeddedSessionBar(context),
+          const SizedBox(height: 6),
+          Expanded(child: _buildDetailPanel(context)),
+        ],
+      ),
+    );
+  }
+
+  /// Horizontal run strip used by the embedded layout.
+  Widget _buildEmbeddedSessionBar(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: Obx(() {
+        if (controller.isLoadingSessions.value) {
+          return const Center(
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+
+        if (controller.sessions.isEmpty) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '该日期暂无运行记录',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          );
+        }
+
+        // 选中项必须在 Obx 闭包里读一次, 否则依赖注册不到 (itemBuilder 是懒执行的)。
+        final selectedSessionId =
+            controller.selectedSession.value?.sessionId ?? '';
+        final sessions = controller.sessions;
+
+        return ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: sessions.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          itemBuilder: (context, index) {
+            final session = sessions[index];
+            return ChoiceChip(
+              label: Text(_embeddedSessionLabel(session)),
+              selected: session.sessionId == selectedSessionId,
+              onSelected: (_) => controller.selectSession(session),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelStyle: Theme.of(context).textTheme.bodySmall,
+              avatar: Icon(
+                session.success
+                    ? Icons.check_circle_rounded
+                    : Icons.error_rounded,
+                size: 14,
+                color: session.success ? Colors.green : Colors.red,
+              ),
+            );
+          },
+        );
+      }),
+    );
+  }
+
+  /// Short label for one run chip: `hh:mm:ss · N 击`.
+  String _embeddedSessionLabel(ClickStatisticsSession session) {
+    final time = session.startTime;
+    final timeText = time == null
+        ? session.startTimeText
+        : '${_twoDigits(time.hour)}:'
+              '${_twoDigits(time.minute)}:'
+              '${_twoDigits(time.second)}';
+    return '$timeText · ${session.totalClicks} 击';
+  }
+
   Widget _buildSelectionPanel(BuildContext context) {
     return Card(
       child: Padding(
@@ -195,9 +336,13 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 
       return DropdownButtonFormField<String>(
         initialValue: items.contains(selected) ? selected : null,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: '实例',
-          border: OutlineInputBorder(),
+          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding: embedded
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)
+              : const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         ),
         items: items
             .map(
@@ -221,9 +366,13 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 
       return DropdownButtonFormField<String>(
         initialValue: items.contains(selected) ? selected : null,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: '任务',
-          border: OutlineInputBorder(),
+          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding: embedded
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)
+              : const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         ),
         items: items
             .map(
@@ -233,7 +382,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
               ),
             )
             .toList(),
-        onChanged: controller.isLoadingDates.value
+        onChanged: controller.isLoadingSessions.value
             ? null
             : controller.selectTask,
       );
@@ -247,9 +396,13 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 
       return DropdownButtonFormField<String>(
         initialValue: items.contains(selected) ? selected : null,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: '日期',
-          border: OutlineInputBorder(),
+          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding: embedded
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)
+              : const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         ),
         items: items
             .map(
@@ -278,16 +431,22 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
         return const Center(child: Text('该日期暂无运行记录'));
       }
 
+      // 同上: 选中项要在 Obx 闭包里读, 否则 itemBuilder 里的读注册不到依赖。
+      final selectedSessionId =
+          controller.selectedSession.value?.sessionId ?? '';
+      final sessions = controller.sessions;
+
       return ListView.separated(
-        itemCount: controller.sessions.length,
+        itemCount: sessions.length,
         separatorBuilder: (_, __) => const SizedBox(height: 6),
         itemBuilder: (context, index) {
-          final session = controller.sessions[index];
+          final session = sessions[index];
 
-          final selected =
-              controller.selectedSession.value?.sessionId == session.sessionId;
-
-          return _buildSessionTile(context, session, selected);
+          return _buildSessionTile(
+            context,
+            session,
+            session.sessionId == selectedSessionId,
+          );
         },
       );
     });
@@ -360,6 +519,8 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 
   Widget _buildDetailPanel(BuildContext context) {
     return Card(
+      // 侧栏里不要再吃默认外边距。
+      margin: embedded ? EdgeInsets.zero : null,
       child: Obx(() {
         if (controller.isLoadingDetail.value) {
           return const Center(child: CircularProgressIndicator());
@@ -377,19 +538,31 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
   }
 
   Widget _buildDetail(BuildContext context, ClickStatisticsDetail detail) {
+    final padding = embedded ? 10.0 : 20.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          padding: EdgeInsets.fromLTRB(
+            padding,
+            padding,
+            padding,
+            embedded ? 6 : 12,
+          ),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   detail.task.tr,
-                  style: Theme.of(context).textTheme.headlineSmall,
+                  style: embedded
+                      ? Theme.of(context).textTheme.titleMedium
+                      : Theme.of(context).textTheme.headlineSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+
+              const SizedBox(width: 8),
 
               Icon(
                 detail.success
@@ -403,40 +576,62 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
 
         const Divider(height: 1),
 
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _buildStatCard(context, '总点击', '${detail.totalClicks}'),
-              _buildStatCard(context, '总滑动', '${detail.totalSwipes}'),
-              _buildStatCard(
-                context,
-                '运行时间',
-                _formatDuration(detail.durationSeconds),
-              ),
-              _buildStatCard(context, '实例', detail.configName),
-              _buildStatCard(
-                context,
-                '状态',
-                detail.status.isEmpty
-                    ? (detail.success ? '成功' : '失败')
-                    : detail.status,
-              ),
-            ],
+        if (embedded)
+          // 侧栏高度紧张: 五张统计卡片换成一行文字。
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding, vertical: 6),
+            child: _buildCompactStats(context, detail),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildStatCard(context, '总点击', '${detail.totalClicks}'),
+                _buildStatCard(context, '总滑动', '${detail.totalSwipes}'),
+                _buildStatCard(
+                  context,
+                  '运行时间',
+                  _formatDuration(detail.durationSeconds),
+                ),
+                _buildStatCard(context, '实例', detail.configName),
+                _buildStatCard(
+                  context,
+                  '状态',
+                  detail.status.isEmpty
+                      ? (detail.success ? '成功' : '失败')
+                      : detail.status,
+                ),
+              ],
+            ),
           ),
-        ),
 
         const Divider(height: 1),
 
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(padding),
             child: _buildHeatmap(context, detail),
           ),
         ),
       ],
+    );
+  }
+
+  /// One compact stats line used by the embedded layout.
+  Widget _buildCompactStats(BuildContext context, ClickStatisticsDetail detail) {
+    final status = detail.status.isEmpty
+        ? (detail.success ? '成功' : '失败')
+        : detail.status;
+    return Text(
+      '总点击 ${detail.totalClicks} · 总滑动 ${detail.totalSwipes} · '
+      '运行 ${_formatDuration(detail.durationSeconds)} · '
+      '${detail.configName} · $status',
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.bodySmall,
     );
   }
 
@@ -473,12 +668,19 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           // ----------------------------------------------------------------
           Row(
             children: [
-              Text('点击热力图', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                '点击热力图',
+                style: embedded
+                    ? Theme.of(context).textTheme.titleSmall
+                    : Theme.of(context).textTheme.titleMedium,
+              ),
 
-              const SizedBox(width: 12),
+              SizedBox(width: embedded ? 8 : 12),
 
               Text(
-                '${visibleEvents.length} / ${detail.events.length} 次操作',
+                embedded
+                    ? '${visibleEvents.length} / ${detail.events.length} 次'
+                    : '${visibleEvents.length} / ${detail.events.length} 次操作',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
 
@@ -492,9 +694,14 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
 
-              const SizedBox(width: 8),
-
-              Text('1280 × 720', style: Theme.of(context).textTheme.bodySmall),
+              // 侧栏窄, 分辨率标注省略。
+              if (!embedded) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '1280 × 720',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
           ),
 
@@ -601,7 +808,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
               ),
 
               SizedBox(
-                width: 100,
+                width: embedded ? 78 : 100,
                 child: Text(
                   '${_formatTimelineTime(currentTime)} / '
                   '${_formatTimelineTime(maxTime)}',
@@ -639,17 +846,21 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           // ----------------------------------------------------------------
           Row(
             children: [
-              Text(
-                '已显示 ${visibleEvents.length} 次操作 '
-                '($visibleClicks 次点击 · $visibleSwipes 次滑动)',
-                style: Theme.of(context).textTheme.bodySmall,
+              Expanded(
+                child: Text(
+                  embedded
+                      ? '已显示 ${visibleEvents.length} / ${detail.events.length}'
+                      : '已显示 ${visibleEvents.length} 次操作 '
+                            '($visibleClicks 次点击 · $visibleSwipes 次滑动)',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
-
-              const Spacer(),
 
               TextButton(
                 onPressed: controller.showFullTimeline,
-                child: const Text('显示全部'),
+                child: Text(embedded ? '全部' : '显示全部'),
               ),
 
               TextButton(

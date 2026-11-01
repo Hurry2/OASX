@@ -177,6 +177,7 @@ class I18n {
       homeTasksTab = 'home_tasks_tab',
       homeParamsTab = 'home_params_tab';
   static const String homeStatsTab = 'home_stats_tab',
+      homeClickStatsTab = 'home_click_stats_tab',
       homeStatsGeneratedAt = 'home_stats_generated_at',
       homeStatsRetentionDays = 'home_stats_retention_days';
   static const String homeStatsToday = 'home_stats_today',

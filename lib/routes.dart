@@ -32,7 +32,7 @@ class Routes {
     ),
     GetPage(
       name: '/click-statistics',
-      page: () => const ClickStatisticsView(),
+      page: () => ClickStatisticsView(),
       binding: ClickStatisticsBinding(),
     ),
   ];

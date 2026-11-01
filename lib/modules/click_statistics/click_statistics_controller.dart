@@ -23,9 +23,17 @@ class ClickStatisticsController extends GetxController {
   final selectedConfig = RxnString();
   final selectedTask = RxnString();
   final selectedDate = RxnString();
+
+  /// 宿主面板钉住的实例；非空时不再用下拉框选实例（侧栏跟随左边选中的配置）。
+  final fixedConfig = ''.obs;
+
   final selectedSession = Rxn<ClickStatisticsSession>();
   final detail = Rxn<ClickStatisticsDetail>();
   final hoveredEvent = Rxn<ClickStatisticsEvent>();
+
+  /// 真正用于请求的实例：有钉住的就用它，否则用下拉框选中的。
+  String? get activeConfig =>
+      fixedConfig.value.isNotEmpty ? fixedConfig.value : selectedConfig.value;
 
   // ---------------------------------------------------------------------------
   // 加载状态
@@ -216,11 +224,31 @@ class ClickStatisticsController extends GetxController {
     await loadDates();
   }
 
+  /// 钉住一个实例（宿主面板用），此后不再需要实例下拉框。
+  Future<void> useFixedConfig(String config) async {
+    final normalized = config.trim();
+
+    if (fixedConfig.value == normalized && dates.isNotEmpty) {
+      return;
+    }
+
+    fixedConfig.value = normalized;
+
+    if (normalized.isEmpty) {
+      await loadConfigs();
+      return;
+    }
+
+    selectedConfig.value = normalized;
+
+    await loadDates();
+  }
+
   // ---------------------------------------------------------------------------
   // Date
   // ---------------------------------------------------------------------------
   Future<void> loadDates() async {
-    final config = selectedConfig.value;
+    final config = activeConfig;
 
     if (config == null || config.isEmpty) {
       _clearFromConfig();
@@ -286,8 +314,9 @@ class ClickStatisticsController extends GetxController {
         return;
       }
 
-      // 默认选择最新日期。
-      selectedDate.value = dates.first;
+      // 默认今日；今日没有数据再退到最新一天。
+      final today = _todayDateKey();
+      selectedDate.value = dates.contains(today) ? today : dates.first;
 
       await loadTasks();
     } catch (e) {
@@ -311,13 +340,21 @@ class ClickStatisticsController extends GetxController {
     await loadTasks();
   }
 
+  /// 本地日期键，格式与后端 `dates` 一致（YYYY-MM-DD）。
+  String _todayDateKey() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
   // ---------------------------------------------------------------------------
   // Task
   // ---------------------------------------------------------------------------
 
   /// 根据当前选中的日期，从当前实例的任务中筛选出实际存在于该日期的任务。
   Future<void> loadTasks() async {
-    final config = selectedConfig.value;
+    final config = activeConfig;
     final date = selectedDate.value;
 
     if (config == null || config.isEmpty || date == null || date.isEmpty) {
@@ -378,7 +415,7 @@ class ClickStatisticsController extends GetxController {
   // ---------------------------------------------------------------------------
 
   Future<void> loadSessions() async {
-    final config = selectedConfig.value;
+    final config = activeConfig;
     final task = selectedTask.value;
     final date = selectedDate.value;
 
@@ -420,11 +457,15 @@ class ClickStatisticsController extends GetxController {
   }
 
   Future<void> selectSession(ClickStatisticsSession session) async {
-    final config = selectedConfig.value;
+    final config = activeConfig;
     final task = selectedTask.value;
     final date = selectedDate.value;
 
-    if (config == null || task == null || date == null) {
+    if (config == null ||
+        config.isEmpty ||
+        task == null ||
+        task.isEmpty ||
+        date == null) {
       return;
     }
 
@@ -466,6 +507,12 @@ class ClickStatisticsController extends GetxController {
   @override
   Future<void> refresh() async {
     _taskDatesCache.clear();
+
+    // 钉住实例时没有实例列表可刷，直接重拉当前实例的日期。
+    if (fixedConfig.value.isNotEmpty) {
+      await loadDates();
+      return;
+    }
 
     await loadConfigs();
   }

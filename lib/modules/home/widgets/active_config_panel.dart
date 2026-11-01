@@ -9,6 +9,7 @@ import 'package:oasx/modules/home/widgets/statistics_panel.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_panel.dart';
 import 'package:oasx/modules/home/widgets/task_catalog_panel.dart';
 import 'package:oasx/modules/home/widgets/task_status_panel.dart';
+import 'package:oasx/modules/home/widgets/workbench_sidebar_panel.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
 class ActiveConfigPanel extends StatelessWidget {
@@ -175,6 +176,9 @@ class ActiveConfigPanel extends StatelessWidget {
       HomeWorkbenchTab.storageStats => StorageStatsPanel(
         scriptName: script.name,
       ),
+      HomeWorkbenchTab.clickStats => WorkbenchClickStatisticsPanel(
+        scriptName: script.name,
+      ),
     };
   }
 
@@ -185,6 +189,7 @@ class ActiveConfigPanel extends StatelessWidget {
       HomeWorkbenchTab.stats => I18n.homeStatsTab.tr,
       HomeWorkbenchTab.logs => I18n.log.tr,
       HomeWorkbenchTab.storageStats => I18n.storageStatsTab.tr,
+      HomeWorkbenchTab.clickStats => I18n.homeClickStatsTab.tr,
     };
   }
 }

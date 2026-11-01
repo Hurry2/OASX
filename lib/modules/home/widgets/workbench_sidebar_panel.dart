@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:oasx/modules/click_statistics/click_statistics_controller.dart';
+import 'package:oasx/modules/click_statistics/click_statistics_view.dart';
 import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/home/models/home_workbench_layout.dart';
 import 'package:oasx/modules/home/widgets/log_center_panel.dart';
@@ -7,7 +11,7 @@ import 'package:oasx/modules/home/widgets/statistics_panel.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_panel.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
-/// Hosts the desktop right sidebar for statistics, logs and storage stats.
+/// Hosts the desktop right sidebar for statistics, logs, monitoring and clicks.
 class WorkbenchSidebarPanel extends StatelessWidget {
   /// Creates the right workbench sidebar.
   const WorkbenchSidebarPanel({
@@ -83,6 +87,9 @@ class WorkbenchSidebarPanel extends StatelessWidget {
                   HomeWorkbenchTab.storageStats => StorageStatsPanel(
                     scriptName: scriptName,
                   ),
+                  HomeWorkbenchTab.clickStats => WorkbenchClickStatisticsPanel(
+                    scriptName: scriptName,
+                  ),
                   _ => const SizedBox.shrink(),
                 },
               ),
@@ -99,7 +106,57 @@ class WorkbenchSidebarPanel extends StatelessWidget {
       HomeWorkbenchTab.stats => I18n.homeStatsTab.tr,
       HomeWorkbenchTab.logs => I18n.log.tr,
       HomeWorkbenchTab.storageStats => I18n.storageStatsTab.tr,
+      HomeWorkbenchTab.clickStats => I18n.homeClickStatsTab.tr,
       _ => '',
     };
+  }
+}
+
+/// Click statistics hosted inside a workbench panel instead of its own route.
+///
+/// The instance follows the panel's script, so this panel has no instance dropdown.
+class WorkbenchClickStatisticsPanel extends StatefulWidget {
+  /// Creates the embedded click statistics panel.
+  const WorkbenchClickStatisticsPanel({super.key, required this.scriptName});
+
+  /// Config/instance currently selected on the left.
+  final String scriptName;
+
+  @override
+  State<WorkbenchClickStatisticsPanel> createState() =>
+      _WorkbenchClickStatisticsPanelState();
+}
+
+class _WorkbenchClickStatisticsPanelState
+    extends State<WorkbenchClickStatisticsPanel> {
+  @override
+  void initState() {
+    super.initState();
+    _ensureController();
+    unawaited(_controller.useFixedConfig(widget.scriptName));
+  }
+
+  @override
+  void didUpdateWidget(covariant WorkbenchClickStatisticsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scriptName != widget.scriptName) {
+      unawaited(_controller.useFixedConfig(widget.scriptName));
+    }
+  }
+
+  ClickStatisticsController get _controller =>
+      Get.find<ClickStatisticsController>();
+
+  /// Registers the controller on first use (the route binding may never have run).
+  void _ensureController() {
+    if (!Get.isRegistered<ClickStatisticsController>()) {
+      Get.lazyPut<ClickStatisticsController>(() => ClickStatisticsController());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _ensureController();
+    return ClickStatisticsView(embedded: true);
   }
 }
