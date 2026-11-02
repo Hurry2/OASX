@@ -32,6 +32,9 @@ class WindowService extends GetxService with WindowListener {
   final enableWindowState = false.obs;
   final enableSystemTray = false.obs;
 
+  /// 窗口整体不透明度（1 = 不透明；< 1 时桌面会透出来）。
+  final windowOpacity = 1.0.obs;
+
   @override
   Future<void> onInit() async {
     try {
@@ -56,13 +59,41 @@ class WindowService extends GetxService with WindowListener {
         _storage.read(StorageKey.enableWindowState.name) ?? false;
     enableSystemTray.value =
         _storage.read(StorageKey.enableSystemTray.name) ?? false;
+    windowOpacity.value =
+        (_storage.read(StorageKey.windowOpacity.name) as num?)?.toDouble() ??
+        1.0;
 
     final lastState = await initWindowState();
 
     await windowManager.waitUntilReadyToShow(buildWindowOptions(lastState));
     windowManager.addListener(this);
+    await _applyWindowOpacity();
 
     _kickoffSystemTrayInit();
+  }
+
+  /// 应用窗口整体不透明度（< 1 时桌面会透出来）。
+  Future<void> _applyWindowOpacity() async {
+    if (!PlatformUtils.isDesktop) {
+      return;
+    }
+    try {
+      await windowManager.setOpacity(windowOpacity.value);
+    } catch (e) {
+      // 某些平台不支持，静默忽略即可。
+      printError(info: 'set window opacity failed: $e');
+    }
+  }
+
+  /// 调整窗口整体不透明度（1 = 不透明）。
+  void setWindowOpacity(double value) {
+    final clamped = value.clamp(0.4, 1.0).toDouble();
+    if (windowOpacity.value == clamped) {
+      return;
+    }
+    windowOpacity.value = clamped;
+    _storage.write(StorageKey.windowOpacity.name, clamped);
+    unawaited(_applyWindowOpacity());
   }
 
   void _kickoffSystemTrayInit() {

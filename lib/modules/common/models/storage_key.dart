@@ -1,5 +1,11 @@
 enum StorageKey {
   dark,
+  accentTheme,
+  backgroundTheme,
+  wallpaperPath,
+  wallpaperDim,
+  surfaceAlpha,
+  windowOpacity,
   language,
   username,
   password,

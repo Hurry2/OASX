@@ -1,6 +1,18 @@
 class I18n {
   static const String logOut = 'Log out', zhCn = 'zh-CN', enUs = 'en-US';
   static const String changeTheme = 'Change Theme',
+      accentColor = 'Accent Color',
+      appBackground = 'Background',
+      appWallpaper = 'Wallpaper',
+      selectImage = 'Choose Image',
+      changeImage = 'Change Image',
+      clearImage = 'Clear Wallpaper',
+      wallpaperDim = 'Wallpaper Dim',
+      surfaceAlpha = 'Surface Opacity',
+      surfaceAlphaHelp = 'surface_alpha_help',
+      windowOpacity = 'Window Opacity',
+      windowOpacityHelp = 'window_opacity_help',
+      wallpaperUnsupported = 'wallpaper_unsupported',
       changeLanguage = 'Change Language',
       projectStatement = 'Project Statement';
   static const String year = 'Years', month = 'Months', day = 'Days';
