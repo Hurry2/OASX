@@ -33,7 +33,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
           return _buildError(context);
         }
 
-        return _buildEmpty(context, '暂无点击统计记录');
+        return _buildEmpty(context, '暂无点击记录');
       }
 
       return LayoutBuilder(
@@ -161,7 +161,7 @@ class ClickStatisticsView extends GetView<ClickStatisticsController> {
       return _buildError(context);
     }
 
-    return _buildEmpty(context, '暂无点击统计记录');
+    return _buildEmpty(context, '暂无点击记录');
   }
 
   /// Compact layout for the sidebar: filters and runs on top, detail fills the rest.

@@ -144,7 +144,7 @@ class ClickStatisticsTitle extends StatelessWidget {
           ],
           Image.asset('assets/images/Icon-app.png', height: 30, width: 30),
           const SizedBox(width: 14),
-          const Flexible(child: _TitleLabel(text: 'OASX / 点击统计')),
+          const Flexible(child: _TitleLabel(text: 'OASX / 热力图')),
         ],
       ),
     );
