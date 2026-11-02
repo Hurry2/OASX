@@ -120,14 +120,34 @@ void main() {
     expect(controller.visibleLogSections.length, 2, reason: '同一天的分段全保留');
   });
 
-  test('prefetchTriggerRows is stricter at the card level', () {
+  test('openLogTask remembers and back restores the card-list offset', () {
     final controller = _controllerWithTasks();
+    double? restored;
+    controller.restoreScrollOffset = (offset) => restored = offset;
 
-    expect(controller.prefetchTriggerRows, 1, reason: '卡片层只有滚到最顶才预取');
-
+    controller.captureCardListOffset(240);
     controller.openLogTask(controller.visibleLogSections.first.key);
+    expect(controller.isLogTaskOpened, isTrue);
 
-    expect(controller.prefetchTriggerRows, 50, reason: '任务层仍按行数留余量');
+    controller.backToLogTaskList();
+
+    expect(controller.isLogTaskOpened, isFalse);
+    expect(restored, 240, reason: '返回时恢复打开前的位置(不跳到顶部)');
+  });
+
+  test('handleInfoViewHidden drops the opened task (no state memory)', () {
+    final controller = _controllerWithTasks();
+    controller.openLogTask(controller.visibleLogSections.first.key);
+    expect(controller.isLogTaskOpened, isTrue);
+
+    controller.handleInfoViewHidden();
+
+    expect(
+      controller.isLogTaskOpened,
+      isFalse,
+      reason: '切到别的配置/标签后不记忆卡片内部状态（用户要求，否则切换很卡）',
+    );
+    expect(controller.openedLogTaskLines, isEmpty);
   });
 
   test('openLogTask jumps to the newest lines', () {
@@ -344,7 +364,7 @@ void main() {
     expect(isLogStartBanner(controller.visibleLogSections.single), isTrue);
   });
 
-  test('logTaskFailureMessage spots a task that failed and restarted', () {
+  test('logTaskFailureMessage flags real errors but not a plain restart', () {
     final controller = ScriptLogBrowserController(scriptName: 'demo');
     controller.lines
       ..clear()
@@ -369,13 +389,16 @@ void main() {
     final sections = buildScriptLogSections(controller.lines);
     expect(sections.length, 2);
 
+    // 真的走错误流程 → 标报错。
     expect(
       controller.logTaskFailureMessage(sections.first),
       contains('Saving error'),
     );
+    // 只是"游戏没在跑"（用户空闲时关游戏也会这样）→ 不标报错。
     expect(
       controller.logTaskFailureMessage(sections.last),
-      contains('recover it via Restart'),
+      isEmpty,
+      reason: '正常关闭游戏后的重启不算报错',
     );
   });
 
@@ -534,7 +557,7 @@ void main() {
     expect(controller.retainedLogDays.length, 1, reason: '仍然只有一天');
   });
 
-  test('a long task keeps every line (no line cap)', () {
+  test('a long task keeps only its newest lines (render budget)', () {
     final controller = ScriptLogBrowserController(scriptName: 'demo');
     const lineCount = 2500;
     controller.lines
@@ -547,9 +570,10 @@ void main() {
 
     controller.openLogTask(section.key);
 
-    expect(controller.openedLogTaskLines.length, lineCount, reason: '不再按行数截断');
-    expect(controller.openedLogTaskLines.first.text, 'line-0');
-    expect(controller.openedLogTaskLines.last.text, 'line-${lineCount - 1}');
-    expect(controller.logRowCount, lineCount);
+    // 卡片可以覆盖很多任务，但单个任务只看最近 1000 行（用户要求：更完整的日志看 txt）。
+    expect(controller.openedLogTaskLines.length, kLogTaskMaxLines);
+    expect(controller.openedLogTaskLines.first.text, 'line-1500');
+    expect(controller.openedLogTaskLines.last.text, 'line-2499');
+    expect(controller.logRowCount, kLogTaskMaxLines);
   });
 }

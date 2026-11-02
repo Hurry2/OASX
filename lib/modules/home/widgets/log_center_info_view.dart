@@ -240,7 +240,13 @@ class LogCenterInfoView extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded),
           ],
         ),
-        onTap: () => controller.openLogTask(section.key),
+        onTap: () {
+          // 记住卡片列表位置，返回时恢复（否则会跳到顶部并触发取旧日志）。
+          controller.captureCardListOffset(
+            scrollController.hasClients ? scrollController.offset : 0,
+          );
+          controller.openLogTask(section.key);
+        },
       ),
     );
   }

@@ -103,6 +103,11 @@ extension ScriptLogBrowserActionsX on ScriptLogBrowserController {
   /// Records whether returning to info view should refresh the latest window.
   void handleInfoViewHidden() {
     _shouldRefreshLatestOnInfoResume = autoScroll.value;
+    // 不记忆"卡片内部"的状态：切到别的配置/标签再回来时直接回卡片列表。
+    // （用户要求：记着内部状态会让切换很卡 —— 一切以流畅/低配为目的。）
+    if (isLogTaskOpened) {
+      backToLogTaskList();
+    }
   }
 
   /// Copies text and shows the shared success snackbar.

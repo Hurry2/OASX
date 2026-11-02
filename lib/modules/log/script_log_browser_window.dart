@@ -9,7 +9,7 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
     lines.clear();
     _lineKeys.clear();
     _maxLineWidthScore = 0;
-    _widthScoreDirty = false;
+    _widthScoreSignature = '';
     savedScrollOffset = 0;
     savedAnchorKey = '';
     savedAnchorDelta = 0;
@@ -74,7 +74,7 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
     _lineKeys
       ..clear()
       ..addAll(window.lines.map((line) => line.key));
-    _recomputeMaxLineWidthScore();
+    // 宽度分数是惰性的（见 maxLineWidthScore），这里不必重算。
     olderCursor = window.olderCursor;
     liveCursor = window.liveCursor;
     reachedStart = window.reachedStart || !window.hasOlder;
@@ -93,7 +93,6 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
     if (olderLines.isNotEmpty) {
       lines.insertAll(0, olderLines);
       _lineKeys.addAll(olderLines.map((line) => line.key));
-      _recomputeMaxLineWidthScore();
       preserveViewportAfterPrepend?.call(olderLines.length);
     }
     olderCursor = window.olderCursor;
@@ -101,7 +100,7 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
   }
 
   /// Recomputes the widest line score after bulk changes.
-  void _recomputeMaxLineWidthScore() {
+  void _recomputeMaxLineWidthScore(String signature) {
     var score = 0;
     for (final line in lines) {
       final current = _scoreScriptLogLineWidth(line.text);
@@ -110,7 +109,7 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
       }
     }
     _maxLineWidthScore = score;
-    _widthScoreDirty = false;
+    _widthScoreSignature = signature;
   }
 
   /// Builds an API-compatible older cursor for a retained first line.

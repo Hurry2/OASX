@@ -68,12 +68,6 @@ List<ScriptLogSection> buildScriptLogSections(List<ScriptLogLine> lines) {
   return sections;
 }
 
-/// 任务视图（按日志行渲染）下：距顶部还剩这么多行时预取更旧的日志。
-const int kLogPrefetchRemainingLines = 50;
-
-/// 卡片视图下"一行"是整段任务（比日志行高得多），只有第一张卡露出来才预取。
-const int kLogPrefetchRemainingCards = 1;
-
 /// One rendered row in the info log list: a task card or a log line.
 class ScriptLogRow {
   /// Creates a task card row.
@@ -95,19 +89,18 @@ class ScriptLogRow {
 /// restarts stay visible in the list, but it is drawn with its own icon.
 const String logStartBannerTitle = 'START';
 
-/// Log markers emitted when a task failed and a restart was scheduled.
+/// Log marker emitted when a task actually went through the error pipeline.
 ///
-/// `Saving error: ` comes from `script.py` right before `task_call("Restart")` on
-/// every error path that stores an error report; `recover it via Restart` comes
-/// from the runtime controller when the game was not running.
-const List<String> _logRestartTriggers = <String>[
-  'Saving error: ',
-  'recover it via Restart',
-];
+/// `Saving error: ` comes from `script.py` right before it stores an error report,
+/// i.e. a real exception.
+///
+/// 注意**不**包含 `recover it via Restart`：那句只是"游戏没在跑"，用户自己空闲时
+/// 关闭游戏、随后重启也会出现 —— 用户明确要求"正常关闭游戏重启不要标成报错重启"。
+const List<String> _logErrorTriggers = <String>['Saving error: '];
 
-/// Whether one log line means the task failed and a restart followed.
-bool _isLogRestartTriggerLine(String text) {
-  for (final marker in _logRestartTriggers) {
+/// Whether one log line means the task itself errored.
+bool _isLogErrorTriggerLine(String text) {
+  for (final marker in _logErrorTriggers) {
     if (text.contains(marker)) {
       return true;
     }
@@ -131,13 +124,6 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
   /// Whether the info view is currently reading one task's log.
   bool get isLogTaskOpened => selectedLogTaskKey.value.isNotEmpty;
 
-  /// 距顶部还剩多少行时才去预取更旧的日志（按当前是卡片层还是任务层区分）。
-  ///
-  /// 卡片层的 row 是整段任务，用任务层的行数阈值会在任意滚动位置都命中，
-  /// 于是"从任务视图退回卡片列表（位置被夹到底部）"也会立刻加载更旧的日志。
-  int get prefetchTriggerRows =>
-      isLogTaskOpened ? kLogPrefetchRemainingLines : kLogPrefetchRemainingCards;
-
   /// Whether following the tail may reload the latest window.
   ///
   /// Reloading replaces the whole window, which would drop the very lines the
@@ -145,19 +131,55 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
   bool get shouldReloadLatestOnFollow => !isLogTaskOpened;
 
   /// Finds one section by its key, or null when it no longer exists.
+  ///
+  /// 走缓存的索引（O(1)）：每次日志追加都会刷新已打开任务的快照，
+  /// 不能在这里重扫整份 lines（行数多时就是卡顿来源）。
   ScriptLogSection? logSectionByKey(String key) {
     if (key.isEmpty) {
       return null;
     }
-    for (final section in buildScriptLogSections(lines)) {
-      if (section.key == key) {
-        return section;
-      }
-    }
-    return null;
+    return _sectionIndex[key];
   }
 
-  /// Opens one task section and snapshots its lines.
+  /// Every task section in the window, cached by the line-list signature.
+  List<ScriptLogSection> get allLogSections {
+    final signature = _sectionCacheSignature;
+    final cached = _allSectionCache;
+    if (cached != null && signature == _allSectionCacheSignature) {
+      return cached;
+    }
+    final computed = buildScriptLogSections(lines);
+    _allSectionCache = computed;
+    _allSectionCacheSignature = signature;
+    // 索引由它派生，重建时一并作废。
+    _sectionIndexCache = null;
+    return computed;
+  }
+
+  /// Key → section index over [allLogSections] (O(1) lookups).
+  Map<String, ScriptLogSection> get _sectionIndex {
+    final all = allLogSections;
+    final cached = _sectionIndexCache;
+    if (cached != null) {
+      return cached;
+    }
+    final index = <String, ScriptLogSection>{};
+    for (final section in all) {
+      index[section.key] = section;
+    }
+    _sectionIndexCache = index;
+    return index;
+  }
+
+  /// 记住卡片列表当前的滚动位置，返回时恢复。
+  ///
+  /// 不记的话，从任务视图退回时位置会被夹到顶部 → 看着像"滚到最顶" → 立刻触发取旧日志，
+  /// 前面的重启卡片就"冒出来"了。
+  void captureCardListOffset(double offset) {
+    _cardListOffset = offset.isFinite && offset > 0 ? offset : 0;
+  }
+
+  /// Opens one task section and snapshots its newest lines.
   void openLogTask(String key) {
     final section = logSectionByKey(key);
     if (section == null) {
@@ -172,13 +194,21 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
     scrollToBottom?.call();
   }
 
-  /// Returns to the task card list.
+  /// Returns to the task card list and restores its previous position.
   void backToLogTaskList() {
     selectedLogTaskKey.value = '';
     openedLogTaskLabel.value = '';
     openedLogTaskLines.clear();
     // 读任务期间不裁剪, 回到列表后把积压的历史释放掉（保留两天的量）。
     trimToLiveWindow();
+    final restoreOffset = _cardListOffset;
+    _cardListOffset = 0;
+    if (restoreOffset > 0) {
+      // 锚点还停在任务视图里，会解析出错误位置 → 清掉，按精确偏移恢复。
+      savedAnchorKey = '';
+      savedAnchorDelta = 0;
+      restoreScrollOffset?.call(restoreOffset);
+    }
   }
 
   /// Keeps the opened task snapshot in sync.
@@ -209,13 +239,17 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
     openedLogTaskLines.assignAll(_linesOfSection(section));
   }
 
-  /// Lines shown for one section: clamped to the current list.
+  /// Lines shown for one section: the newest [kLogTaskMaxLines] lines of it.
   ///
-  /// 不再按行数截断（用户要求：行数不限制）；渲染侧是虚拟化的，长任务也不会卡。
+  /// 卡片可以覆盖很多任务，但单个任务点进去只看最近 [kLogTaskMaxLines] 行
+  /// （用户要求：要更完整的日志直接去看 txt 文件）—— 这也让任务视图保持轻量。
   List<ScriptLogLine> _linesOfSection(ScriptLogSection section) {
     final start = section.firstIndex.clamp(0, lines.length);
     final end = (section.lastIndex + 1).clamp(start, lines.length);
-    return lines.sublist(start, end);
+    if (end - start <= kLogTaskMaxLines) {
+      return lines.sublist(start, end);
+    }
+    return lines.sublist(end - kLogTaskMaxLines, end);
   }
 
   /// 窗口里最新 [kLogRetainedDays] 天的日志文件名（窗口按老→新排列，从尾部往前数）。
@@ -246,13 +280,14 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
   ///
   /// 只展示需要保留的两天（旧版 OAS 的窗口可能回填到更早，那些日子不再显示）。
   /// 窗口首段是残缺段（首行不是横幅）时隐藏，但它得确实还在列表里才需要跳过。
-  /// 结果按 `lines` 缓存，`lines` 变化时作废（见 onInit 的 ever）—— 行数多时这是卡顿主因。
+  /// 结果按行列表签名缓存 —— 行数多时重算是卡顿主因。
   List<ScriptLogSection> get visibleLogSections {
+    final signature = _sectionCacheSignature;
     final cached = _visibleSectionCache;
-    if (cached != null) {
+    if (cached != null && signature == _visibleSectionCacheSignature) {
       return cached;
     }
-    var sections = buildScriptLogSections(lines);
+    var sections = allLogSections;
     if (lines.isNotEmpty) {
       final kept = sections.where(isRetainedDaySection).toList();
       if (kept.isNotEmpty) {
@@ -268,10 +303,11 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
         ? sections.sublist(1)
         : sections;
     _visibleSectionCache = result;
+    _visibleSectionCacheSignature = signature;
     return result;
   }
 
-  /// The restart-trigger log line of one task section, or '' when it did not fail.
+  /// The error log line of one task section, or '' when it did not error.
   String logTaskFailureMessage(ScriptLogSection section) {
     if (lines.isEmpty) {
       return '';
@@ -280,17 +316,17 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
     final end = section.lastIndex.clamp(0, lines.length - 1);
     for (var index = start; index <= end; index++) {
       final text = lines[index].text;
-      if (_isLogRestartTriggerLine(text)) {
+      if (_isLogErrorTriggerLine(text)) {
         return _logLineMessage(text);
       }
     }
     return '';
   }
 
-  /// The restart-trigger log line of the opened task, or '' when it did not fail.
+  /// The error log line of the opened task, or '' when it did not error.
   String get openedLogTaskFailureMessage {
     for (final line in openedLogTaskLines) {
-      if (_isLogRestartTriggerLine(line.text)) {
+      if (_isLogErrorTriggerLine(line.text)) {
         return _logLineMessage(line.text);
       }
     }

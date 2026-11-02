@@ -104,15 +104,8 @@ void _handleLogCenterScrollPosition(_LogCenterPanelState state) {
       position.maxScrollExtent - _LogCenterPanelState._bottomThreshold;
   controller.handleViewportPosition(isAtBottom: isAtBottom);
   _saveLogCenterViewport(state);
-  final rowsBeforeViewport =
-      _firstVisibleLogRowIndex(controller, scrollController, offset);
-  // 卡片层的"一行"是整段任务（比日志行高得多），沿用按行数的阈值会在任意位置都命中。
-  // 更关键的是：内容没占满视口时根本没有"向上滚"这个动作 —— 从任务视图退回卡片列表时
-  // 位置会被夹到 0（看起来像滚到最顶），曾经因此每次返回都取 1000 行更旧的日志，日期一路往前翻。
-  final canScrollUp = position.maxScrollExtent > 0;
-  if (canScrollUp && rowsBeforeViewport <= controller.prefetchTriggerRows) {
-    controller.prefetchOlder();
-  }
+  // 不再自动回翻更旧的日志（用户：只看当天/两天，前面的不需要；更完整的日志直接看 txt）。
+  // 这样卡片列表在任何滚动位置都不会突然多出一批旧卡片，也省掉一批请求。
 }
 
 /// Persists the current info log viewport for script revisit recovery.

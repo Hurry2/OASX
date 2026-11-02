@@ -44,6 +44,9 @@ const int kLogRetainedDays = 2;
 /// 两天内如果超过它就从最旧的一端提前收缩 —— 内存不会被日志量无限拉高。
 const int kLogMaxRetainedBytes = 32 * 1024 * 1024;
 
+/// 单个任务点进去最多看多少行（只看最近这些行；更完整的日志直接看 txt 文件）。
+const int kLogTaskMaxLines = 1000;
+
 /// 实时追加一次最多取多少行（服务端 MAX_STREAM_LIMIT_LINES = 1000）。
 const int kLogStreamLoadLines = 1000;
 
@@ -67,11 +70,22 @@ class ScriptLogBrowserController extends GetxController {
   /// Cached score for the widest info log line (recomputed lazily).
   int _maxLineWidthScore = 0;
 
-  /// Whether the cached widest-line score is stale.
-  bool _widthScoreDirty = true;
+  /// Signature the cached widest-line score was computed from.
+  String _widthScoreSignature = '';
 
-  /// Cached list of visible task sections (invalidated whenever lines change).
+  /// Cached list of visible task sections, plus the signature it was built from.
+  ///
+  /// 缓存用"行列表签名"校验而不是靠 ever 钩子：控制器可能被直接 new 出来（测试），
+  /// 那时 onInit 不会跑，靠钩子失效会拿到过期数据。
   List<ScriptLogSection>? _visibleSectionCache;
+  String _visibleSectionCacheSignature = '';
+
+  /// Cached list of every task section in the window.
+  List<ScriptLogSection>? _allSectionCache;
+  String _allSectionCacheSignature = '';
+
+  /// Key → section index over [_allSectionCache] for O(1) lookups.
+  Map<String, ScriptLogSection>? _sectionIndexCache;
 
   /// Whether info latest window is loading.
   final infoLoading = false.obs;
@@ -216,27 +230,34 @@ class ScriptLogBrowserController extends GetxController {
   int _openedSectionFirstIndex = -1;
   int _openedSectionLineCount = -1;
 
+  /// 打开任务前卡片列表的滚动位置；返回时恢复（0 表示不恢复）。
+  double _cardListOffset = 0;
+
   /// Returns whether info view should reload latest logs on the next activate.
   bool get shouldRefreshLatestOnInfoResume => _shouldRefreshLatestOnInfoResume;
 
   @override
   void onInit() {
     // 打开的活任务会持续追加新行, 需要跟着刷新快照。
-    // 顺带作废两个缓存, 免得滚动/重建时反复做 O(n) 计算（行数多时这就是卡顿来源）。
-    ever(lines, (_) {
-      _visibleSectionCache = null;
-      _widthScoreDirty = true;
-      refreshOpenedLogTask();
-    });
+    // 其余缓存按签名惰性校验（见 _sectionCacheSignature），不依赖这个钩子。
+    ever(lines, (_) => refreshOpenedLogTask());
     super.onInit();
   }
 
+  /// Cheap signature of the current line list, used to validate cached sections.
+  ///
+  /// 日志只会追加/前插/裁剪，不会原地改内容，所以"长度 + 首尾行 key"足够当签名。
+  String get _sectionCacheSignature => lines.isEmpty
+      ? '0'
+      : '${lines.length}|${lines.first.key}|${lines.last.key}';
+
   /// Widest info log line score, computed on demand.
   ///
-  /// 只有横向滚动（不换行）时才需要它，所以放在 getter 里惰性算，避免每次增删都全量扫一遍。
+  /// 只有横向滚动（不换行）时才需要它，所以惰性算，避免每次增删都全量扫一遍。
   int get maxLineWidthScore {
-    if (_widthScoreDirty) {
-      _recomputeMaxLineWidthScore();
+    final signature = _sectionCacheSignature;
+    if (signature != _widthScoreSignature) {
+      _recomputeMaxLineWidthScore(signature);
     }
     return _maxLineWidthScore;
   }

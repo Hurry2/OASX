@@ -290,7 +290,7 @@ final Map<String, String> _us_ui = {
   I18n.homeLogScrollToBottom: 'Scroll to bottom',
   I18n.homeLogSectionUnknown: 'Earlier logs',
   I18n.homeLogSectionLines: 'lines',
-  I18n.homeLogTaskFailed: 'failed → restarted',
+  I18n.homeLogTaskFailed: 'errored',
   I18n.argsDraftDirty: 'Pending changes',
   I18n.argsMixedValue: 'Mixed value',
   I18n.argsDiscardChanges: 'Discard',
