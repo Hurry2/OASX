@@ -97,7 +97,6 @@ extension ScriptLogBrowserActionsX on ScriptLogBrowserController {
     }
     if (!isAtBottom && autoScroll.value) {
       autoScroll.value = false;
-      retainedLogLineLimit = kManualScrollLogWindowLineLimit;
     }
   }
 

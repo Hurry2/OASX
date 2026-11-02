@@ -8,54 +8,57 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
   void clearInfoLogs() {
     lines.clear();
     _lineKeys.clear();
-    maxLineWidthScore = 0;
+    _maxLineWidthScore = 0;
+    _widthScoreDirty = false;
     savedScrollOffset = 0;
     savedAnchorKey = '';
     savedAnchorDelta = 0;
-    retainedLogLineLimit = kAutoScrollLogWindowLineLimit;
   }
 
-  /// Releases excessive history before returning to live tail.
+  /// Drops history older than the newest [kLogRetainedDays] days.
   ///
-  /// While a task log is open nothing is trimmed: a section's identity is its
-  /// first line, so dropping that line would make the opened task unresolvable
-  /// and throw the view back to the card list.
-  ///
-  /// [keepOlder] is used right after older history was prepended: the user asked
-  /// for that content, so the newest lines are dropped instead of the new page.
-  void trimToLiveWindow({bool keepOlder = false}) {
-    if (isLogTaskOpened || lines.length <= retainedLogLineLimit) {
+  /// 保留策略按"天"而不是"行数"（用户要求：保留两天、不限行数）。
+  /// 打开某个任务时不裁剪：分段的身份是它的首行，裁掉首行会让打开的任务失联，
+  /// 界面就会退回卡片列表。
+  void trimToLiveWindow() {
+    if (isLogTaskOpened || lines.isEmpty) {
       return;
     }
-    if (keepOlder || !autoScroll.value) {
-      _trimNewestLines();
-    } else {
-      _trimOldestLines();
+    final keepFrom = _retainedWindowStart();
+    if (keepFrom <= 0) {
+      return;
     }
-    _recomputeMaxLineWidthScore();
-  }
-
-  /// Trims old lines while following the live tail.
-  void _trimOldestLines() {
-    final removedCount = lines.length - retainedLogLineLimit;
-    final removedLines = lines.take(removedCount).toList();
-    lines.removeRange(0, removedCount);
+    final removedLines = lines.take(keepFrom).toList();
+    lines.removeRange(0, keepFrom);
     _removeLineKeys(removedLines);
     if (lines.isNotEmpty) {
+      // 保留段的最旧一行成为新的回翻游标。
       olderCursor = _buildOlderCursor(lines.first);
       reachedStart = false;
     }
   }
 
-  /// Trims newest lines while the user is reading an older viewport.
-  void _trimNewestLines() {
-    final start = retainedLogLineLimit;
-    final removedLines = lines.skip(start).toList();
-    lines.removeRange(start, lines.length);
-    _removeLineKeys(removedLines);
-    if (lines.isNotEmpty) {
-      liveCursor = _buildLiveCursor(lines.last);
+  /// Index of the first line that is still kept.
+  ///
+  /// 两个条件取更严的那个：① 最近 [kLogRetainedDays] 天；② 文本不超过
+  /// [kLogMaxRetainedBytes]（内存软上限）。`lines` 按老→新排列，所以从尾部往前数一趟即可。
+  int _retainedWindowStart() {
+    final days = <String>{};
+    var bytes = 0;
+    for (var index = lines.length - 1; index >= 0; index--) {
+      final line = lines[index];
+      if (!days.contains(line.fileName)) {
+        if (days.length == kLogRetainedDays) {
+          return index + 1;
+        }
+        days.add(line.fileName);
+      }
+      bytes += line.byteLength > 0 ? line.byteLength : line.text.length;
+      if (bytes > kLogMaxRetainedBytes) {
+        return index + 1;
+      }
     }
+    return 0;
   }
 
   /// Removes dedupe keys for discarded lines.
@@ -63,13 +66,6 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
     for (final line in removedLines) {
       _lineKeys.remove(line.key);
     }
-  }
-
-  /// Refreshes the retention limit from the current auto-scroll mode.
-  void syncWindowLimitForMode() {
-    retainedLogLineLimit = autoScroll.value
-        ? kAutoScrollLogWindowLineLimit
-        : kManualScrollLogWindowLineLimit;
   }
 
   /// Applies a fresh latest window.
@@ -106,13 +102,15 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
 
   /// Recomputes the widest line score after bulk changes.
   void _recomputeMaxLineWidthScore() {
-    maxLineWidthScore = 0;
+    var score = 0;
     for (final line in lines) {
-      final score = _scoreScriptLogLineWidth(line.text);
-      if (score > maxLineWidthScore) {
-        maxLineWidthScore = score;
+      final current = _scoreScriptLogLineWidth(line.text);
+      if (current > score) {
+        score = current;
       }
     }
+    _maxLineWidthScore = score;
+    _widthScoreDirty = false;
   }
 
   /// Builds an API-compatible older cursor for a retained first line.
@@ -121,20 +119,6 @@ extension ScriptLogBrowserWindowX on ScriptLogBrowserController {
       'v': _logCursorVersion,
       'script_name': scriptName,
       'direction': 'older',
-      'file_name': line.fileName,
-      'offset': line.offset,
-      'line_no': line.lineNo,
-    };
-    final json = jsonEncode(cursorPayload);
-    return base64Url.encode(utf8.encode(json)).replaceAll('=', '');
-  }
-
-  /// Builds an API-compatible live cursor for a retained last line.
-  String _buildLiveCursor(ScriptLogLine line) {
-    final cursorPayload = {
-      'v': _logCursorVersion,
-      'script_name': scriptName,
-      'direction': 'newer',
       'file_name': line.fileName,
       'offset': line.offset,
       'line_no': line.lineNo,

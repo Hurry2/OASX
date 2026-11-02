@@ -134,27 +134,56 @@ class LogCenterErrorDetailView extends StatelessWidget {
     ScriptErrorLogDetail detail, {
     required String title,
   }) {
-    return Scrollbar(
+    final slivers = <Widget>[
+      SliverToBoxAdapter(
+        child: _buildHeader(
+          context,
+          title,
+          trailing: _buildHeaderActions(),
+        ),
+      ),
+      const SliverToBoxAdapter(child: SizedBox(height: 8)),
+      SliverToBoxAdapter(child: _buildImages(detail)),
+      if (detail.images.isNotEmpty)
+        const SliverToBoxAdapter(child: SizedBox(height: 6)),
+      ..._buildLogSlivers(context),
+    ];
+    final vertical = Scrollbar(
       controller: detailScrollController,
       interactive: true,
       thumbVisibility: true,
       child: CustomScrollView(
         controller: detailScrollController,
-        slivers: [
-          SliverToBoxAdapter(
-            child: _buildHeader(
-              context,
-              title,
-              trailing: _buildHeaderActions(),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          SliverToBoxAdapter(child: _buildImages(detail)),
-          if (detail.images.isNotEmpty)
-            const SliverToBoxAdapter(child: SizedBox(height: 6)),
-          ..._buildLogSlivers(context),
-        ],
+        slivers: slivers,
       ),
+    );
+    if (controller.wrapLines.value) {
+      return vertical;
+    }
+    // 不换行时把横向滚动包在最外层, 里面仍是虚拟化的纵向列表（与信息日志页同一套结构）,
+    // 这样几万行也不会把整段日志塞进一个 Column 里。
+    final widthScore = controller.selectedErrorLogMaxWidthScore.value;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = _resolveContentWidth(
+          context,
+          constraints.maxWidth,
+          widthScore,
+        );
+        return Scrollbar(
+          controller: detailHorizontalScrollController,
+          interactive: true,
+          thumbVisibility: width > constraints.maxWidth,
+          notificationPredicate: (notification) {
+            return notification.metrics.axis == Axis.horizontal;
+          },
+          child: SingleChildScrollView(
+            controller: detailHorizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(width: width, child: vertical),
+          ),
+        );
+      },
     );
   }
 

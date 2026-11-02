@@ -29,23 +29,23 @@ part 'script_log_browser_window.dart';
 
 /// Lines requested for one info-log window load.
 ///
-/// 1000 lines is the budget the info view works with: the card list covers the
-/// tasks inside that window, and a single longer task keeps its newest lines.
-const int kLogWindowLoadLines = 1000;
+/// 用户要求"行数也不限制": 直接取服务端允许的上限（MAX_LIMIT_LINES = 10000），
+/// 能带多少带多少；窗口规模靠"只保留最近两天"来限制，而不是靠行数。
+const int kLogWindowLoadLines = 10000;
 
 /// Bytes requested for one info-log window load.
-///
-/// Kept above what 1000 lines usually need so the line count caps first.
 const int kLogWindowLoadBytes = 4194304;
 
-/// Retained line count while following the live tail.
-const int kAutoScrollLogWindowLineLimit = 1000;
+/// 窗口保留的最新日志天数（用户要求保留两天）。
+const int kLogRetainedDays = 2;
 
-/// Retained line count while browsing history.
-const int kManualScrollLogWindowLineLimit = 1000;
+/// 常驻窗口的文本字节软上限（按实测约 316 B/行，32 MB ≈ 10 万行）。
+///
+/// 两天内如果超过它就从最旧的一端提前收缩 —— 内存不会被日志量无限拉高。
+const int kLogMaxRetainedBytes = 32 * 1024 * 1024;
 
-/// Maximum lines kept for one opened task; longer tasks keep only their tail.
-const int kLogTaskMaxLines = 1000;
+/// 实时追加一次最多取多少行（服务端 MAX_STREAM_LIMIT_LINES = 1000）。
+const int kLogStreamLoadLines = 1000;
 
 /// Script-scoped log browser controller.
 class ScriptLogBrowserController extends GetxController {
@@ -64,8 +64,14 @@ class ScriptLogBrowserController extends GetxController {
   /// Cached set of info log keys for fast deduplication.
   final _lineKeys = <String>{};
 
-  /// Cached score for the widest info log line.
-  int maxLineWidthScore = 0;
+  /// Cached score for the widest info log line (recomputed lazily).
+  int _maxLineWidthScore = 0;
+
+  /// Whether the cached widest-line score is stale.
+  bool _widthScoreDirty = true;
+
+  /// Cached list of visible task sections (invalidated whenever lines change).
+  List<ScriptLogSection>? _visibleSectionCache;
 
   /// Whether info latest window is loading.
   final infoLoading = false.obs;
@@ -196,9 +202,6 @@ class ScriptLogBrowserController extends GetxController {
   /// Whether info view should reload the latest window when re-entered.
   bool _shouldRefreshLatestOnInfoResume = false;
 
-  /// Maximum lines retained in the current visible info window.
-  int retainedLogLineLimit = kAutoScrollLogWindowLineLimit;
-
   /// Task section currently opened in the info log view ('' = card list).
   final selectedLogTaskKey = ''.obs;
 
@@ -209,14 +212,59 @@ class ScriptLogBrowserController extends GetxController {
   /// Snapshot of the opened task's lines, taken when the task was opened.
   final openedLogTaskLines = <ScriptLogLine>[].obs;
 
+  /// Section bounds the current snapshot was built from (skip needless rebuilds).
+  int _openedSectionFirstIndex = -1;
+  int _openedSectionLineCount = -1;
+
   /// Returns whether info view should reload latest logs on the next activate.
   bool get shouldRefreshLatestOnInfoResume => _shouldRefreshLatestOnInfoResume;
 
   @override
   void onInit() {
     // 打开的活任务会持续追加新行, 需要跟着刷新快照。
-    ever(lines, (_) => refreshOpenedLogTask());
+    // 顺带作废两个缓存, 免得滚动/重建时反复做 O(n) 计算（行数多时这就是卡顿来源）。
+    ever(lines, (_) {
+      _visibleSectionCache = null;
+      _widthScoreDirty = true;
+      refreshOpenedLogTask();
+    });
     super.onInit();
+  }
+
+  /// Widest info log line score, computed on demand.
+  ///
+  /// 只有横向滚动（不换行）时才需要它，所以放在 getter 里惰性算，避免每次增删都全量扫一遍。
+  int get maxLineWidthScore {
+    if (_widthScoreDirty) {
+      _recomputeMaxLineWidthScore();
+    }
+    return _maxLineWidthScore;
+  }
+
+  /// Number of rows the info list would render right now (O(1)).
+  int get logRowCount =>
+      isLogTaskOpened ? openedLogTaskLines.length : visibleLogSections.length;
+
+  /// Anchor line key of one rendered row index (O(1); avoids building every row).
+  String logRowAnchorKeyAt(int index) {
+    if (index < 0) {
+      return '';
+    }
+    if (isLogTaskOpened) {
+      if (index >= openedLogTaskLines.length) {
+        return '';
+      }
+      return openedLogTaskLines[index].key;
+    }
+    final sections = visibleLogSections;
+    if (index >= sections.length) {
+      return '';
+    }
+    final section = sections[index];
+    if (section.firstIndex >= lines.length) {
+      return '';
+    }
+    return lines[section.firstIndex].key;
   }
 
   @override

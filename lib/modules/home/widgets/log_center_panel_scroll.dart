@@ -106,7 +106,11 @@ void _handleLogCenterScrollPosition(_LogCenterPanelState state) {
   _saveLogCenterViewport(state);
   final rowsBeforeViewport =
       _firstVisibleLogRowIndex(controller, scrollController, offset);
-  if (rowsBeforeViewport <= _LogCenterPanelState._prefetchRemainingLines) {
+  // 卡片层的"一行"是整段任务（比日志行高得多），沿用按行数的阈值会在任意位置都命中。
+  // 更关键的是：内容没占满视口时根本没有"向上滚"这个动作 —— 从任务视图退回卡片列表时
+  // 位置会被夹到 0（看起来像滚到最顶），曾经因此每次返回都取 1000 行更旧的日志，日期一路往前翻。
+  final canScrollUp = position.maxScrollExtent > 0;
+  if (canScrollUp && rowsBeforeViewport <= controller.prefetchTriggerRows) {
     controller.prefetchOlder();
   }
 }
@@ -121,13 +125,17 @@ void _saveLogCenterViewport(_LogCenterPanelState state) {
     return;
   }
   final offset = scrollController.offset;
-  final rows = controller.logRows;
+  // 用 logRowCount/按索引取锚点, 避免每帧 materialize 整份 logRows —— 行数多时那就是卡顿来源。
+  final rowCount = controller.logRowCount;
   final extent = _rowExtentFor(controller, scrollController);
-  final rowIndex =
-      _firstVisibleLogRowIndex(controller, scrollController, offset)
-          .clamp(0, rows.length);
-  final anchorKey =
-      rowIndex < rows.length ? _rowAnchorKey(controller, rows[rowIndex]) : '';
+  final rowIndex = _firstVisibleLogRowIndex(
+    controller,
+    scrollController,
+    offset,
+  ).clamp(0, rowCount);
+  final anchorKey = rowIndex < rowCount
+      ? controller.logRowAnchorKeyAt(rowIndex)
+      : '';
   controller.saveViewport(
     offset: offset,
     anchorKey: anchorKey,
@@ -162,7 +170,7 @@ double _rowExtentFor(
   if (controller == null || !scrollController.hasClients) {
     return _LogCenterPanelState._estimatedLineExtent;
   }
-  final rowCount = controller.logRows.length;
+  final rowCount = controller.logRowCount;
   if (rowCount <= 0) {
     return _LogCenterPanelState._estimatedLineExtent;
   }

@@ -7,9 +7,10 @@ ScriptLogLine _line(
   String text, {
   String? task,
   bool start = false,
+  String fileName = '2026-11-01_demo.txt',
 }) {
   return ScriptLogLine(
-    fileName: '2026-11-01_demo.txt',
+    fileName: fileName,
     lineNo: lineNo,
     offset: lineNo * 10,
     byteLength: text.length,
@@ -35,7 +36,110 @@ ScriptLogBrowserController _controllerWithTasks() {
   return controller;
 }
 
+/// One window that already spans three days (2 lines each).
+ScriptLogBrowserController _threeDayController() {
+  final controller = ScriptLogBrowserController(scriptName: 'demo');
+  controller.lines
+    ..clear()
+    ..addAll(<ScriptLogLine>[
+      _line(
+        1,
+        '════',
+        task: '大富翁',
+        start: true,
+        fileName: '2026-10-31_demo.txt',
+      ),
+      _line(2, 'oldest', task: '大富翁', fileName: '2026-10-31_demo.txt'),
+      _line(
+        3,
+        '════',
+        task: '结界挂卡',
+        start: true,
+        fileName: '2026-11-01_demo.txt',
+      ),
+      _line(4, 'yesterday', task: '结界挂卡', fileName: '2026-11-01_demo.txt'),
+      _line(
+        5,
+        '════',
+        task: '百鬼棋局',
+        start: true,
+        fileName: '2026-11-02_demo.txt',
+      ),
+      _line(6, 'today', task: '百鬼棋局', fileName: '2026-11-02_demo.txt'),
+    ]);
+  return controller;
+}
+
 void main() {
+  test('visibleLogSections keeps the newest two days and hides the third', () {
+    final controller = ScriptLogBrowserController(scriptName: 'demo');
+    controller.lines
+      ..clear()
+      ..addAll(<ScriptLogLine>[
+        _line(
+          1,
+          '════',
+          task: '大富翁',
+          start: true,
+          fileName: '2026-10-31_demo.txt',
+        ),
+        _line(2, 'two days ago', task: '大富翁', fileName: '2026-10-31_demo.txt'),
+        _line(
+          3,
+          '════',
+          task: '结界挂卡',
+          start: true,
+          fileName: '2026-11-01_demo.txt',
+        ),
+        _line(4, 'yesterday', task: '结界挂卡', fileName: '2026-11-01_demo.txt'),
+        _line(
+          5,
+          '════',
+          task: '百鬼棋局',
+          start: true,
+          fileName: '2026-11-02_demo.txt',
+        ),
+        _line(6, 'today', task: '百鬼棋局', fileName: '2026-11-02_demo.txt'),
+      ]);
+
+    expect(controller.logWindowCoversRetention, isTrue, reason: '已经够两天');
+    expect(controller.retainedLogDays.length, kLogRetainedDays);
+
+    final visible = controller.visibleLogSections;
+
+    expect(visible.length, 2, reason: '只保留最近两天');
+    expect(visible.first.label, '结界挂卡');
+    expect(visible.last.label, '百鬼棋局');
+    expect(controller.logRows.length, 2);
+  });
+
+  test('a single-day window still asks for one more day', () {
+    final controller = _controllerWithTasks();
+
+    expect(controller.logWindowCoversRetention, isFalse);
+    expect(controller.visibleLogSections.length, 2, reason: '同一天的分段全保留');
+  });
+
+  test('prefetchTriggerRows is stricter at the card level', () {
+    final controller = _controllerWithTasks();
+
+    expect(controller.prefetchTriggerRows, 1, reason: '卡片层只有滚到最顶才预取');
+
+    controller.openLogTask(controller.visibleLogSections.first.key);
+
+    expect(controller.prefetchTriggerRows, 50, reason: '任务层仍按行数留余量');
+  });
+
+  test('openLogTask jumps to the newest lines', () {
+    final controller = _controllerWithTasks();
+    var scrolls = 0;
+    controller.scrollToBottom = () => scrolls++;
+
+    controller.openLogTask(controller.visibleLogSections.first.key);
+
+    expect(scrolls, 1, reason: '进任务应默认停到最下面');
+  });
+
   test('buildScriptLogSections splits on task banners', () {
     final sections = buildScriptLogSections(_controllerWithTasks().lines);
 
@@ -208,7 +312,7 @@ void main() {
     expect(controller.logRows.length, 2);
   });
 
-  test('visibleLogSections drops the process-start banner', () {
+  test('visibleLogSections keeps the process-start banner as a card', () {
     final controller = ScriptLogBrowserController(scriptName: 'demo');
     controller.lines
       ..clear()
@@ -221,22 +325,23 @@ void main() {
 
     final visible = controller.visibleLogSections;
 
-    expect(visible.length, 1, reason: 'START 不是任务, 不该占卡片');
-    expect(visible.single.label, '大富翁');
-    expect(controller.logRows.length, 1);
+    expect(visible.length, 2, reason: 'START 保留成卡片, 用来看出这里重启过');
+    expect(visible.first.label, 'START');
+    expect(isLogStartBanner(visible.first), isTrue);
+    expect(isLogStartBanner(visible.last), isFalse);
+    expect(controller.logRows.length, 2);
   });
 
-  test('visibleLogSections falls back when every section is a start banner', () {
+  test('isLogStartBanner ignores case and surrounding spaces', () {
     final controller = ScriptLogBrowserController(scriptName: 'demo');
     controller.lines
       ..clear()
       ..addAll(<ScriptLogLine>[
-        _line(1, '════', task: 'START', start: true),
-        _line(2, 'body', task: 'START'),
+        _line(1, '════', task: ' start ', start: true),
+        _line(2, 'body', task: ' start '),
       ]);
 
-    expect(controller.visibleLogSections.length, 1, reason: '不能把界面弄成全空');
-    expect(controller.logRows.length, 1);
+    expect(isLogStartBanner(controller.visibleLogSections.single), isTrue);
   });
 
   test('logTaskFailureMessage spots a task that failed and restarted', () {
@@ -316,64 +421,74 @@ void main() {
     expect(controller.shouldReloadLatestOnFollow, isTrue);
   });
 
-  test('openLogTask keeps a longer window and back restores the mode limit', () {
-    final controller = _controllerWithTasks();
-    final sections = buildScriptLogSections(controller.lines);
-
-    controller.openLogTask(sections.first.key);
-    expect(controller.retainedLogLineLimit, kManualScrollLogWindowLineLimit);
-
-    controller.backToLogTaskList();
-    expect(controller.retainedLogLineLimit, kAutoScrollLogWindowLineLimit);
-  });
-
   test('trimToLiveWindow leaves the opened task untouched', () {
-    final controller = _controllerWithTasks();
+    final controller = _threeDayController();
     final sections = buildScriptLogSections(controller.lines);
-    controller.openLogTask(sections.first.key);
-    controller.retainedLogLineLimit = 4;
+    controller.openLogTask(sections.last.key);
 
     controller.trimToLiveWindow();
 
     expect(controller.lines.length, 6, reason: '读任务期间完全不裁剪');
     expect(
       controller.openedLogTaskLines.length,
-      4,
+      2,
       reason: '裁剪不能把被打开任务的首行弄丢, 否则会退出子界面',
     );
-    expect(controller.logRows.length, 4);
   });
 
-  test('trimToLiveWindow resumes after returning to the card list', () {
-    final controller = _controllerWithTasks();
+  test('trimToLiveWindow trims to two days after returning to the card list', () {
+    final controller = _threeDayController();
     final sections = buildScriptLogSections(controller.lines);
-    controller.openLogTask(sections.first.key);
-    controller.retainedLogLineLimit = 4;
+    controller.openLogTask(sections.last.key);
     controller.trimToLiveWindow();
     expect(controller.lines.length, 6);
 
     controller.backToLogTaskList();
-    controller.retainedLogLineLimit = 4;
     controller.trimToLiveWindow();
 
+    expect(
+      controller.retainedLogDays.length,
+      kLogRetainedDays,
+      reason: '只保留最近两天',
+    );
+    expect(controller.lines.first.fileName, '2026-11-01_demo.txt');
     expect(controller.lines.length, 4);
-    expect(controller.lines.last.task, '六道之门');
   });
 
-  test('trimToLiveWindow keeps freshly prepended history when asked', () {
+  test('trimToLiveWindow drops days older than the retention window', () {
     final controller = _controllerWithTasks();
-    controller.retainedLogLineLimit = 6;
     controller.lines.insertAll(0, <ScriptLogLine>[
-      for (var index = 0; index < 4; index++)
-        _line(index + 100, 'older-$index', task: '大富翁', start: index == 0),
+      for (var index = 0; index < 2; index++)
+        _line(
+          index + 100,
+          'oldest-$index',
+          task: '大富翁',
+          start: index == 0,
+          fileName: '2026-10-30_demo.txt',
+        ),
+      for (var index = 0; index < 2; index++)
+        _line(
+          index + 200,
+          'yesterday-$index',
+          task: '结界挂卡',
+          start: index == 0,
+          fileName: '2026-10-31_demo.txt',
+        ),
     ]);
 
-    controller.trimToLiveWindow(keepOlder: true);
+    controller.trimToLiveWindow();
 
-    expect(controller.lines.length, 6);
-    expect(controller.lines.first.text, 'older-0', reason: '刚拉回来的旧内容不能丢');
-    expect(controller.lines[3].text, 'older-3');
-    expect(controller.lines.last.task, '大富翁', reason: '被裁掉的是较新的那一侧');
+    expect(controller.retainedLogDays.length, kLogRetainedDays);
+    expect(
+      controller.lines.any((line) => line.text.startsWith('oldest-')),
+      isFalse,
+      reason: '超出两天的最旧那一天被裁掉',
+    );
+    expect(
+      controller.lines.any((line) => line.text.startsWith('yesterday-')),
+      isTrue,
+      reason: '第二天要保留',
+    );
   });
 
   test('prefetchOlder is skipped while a task is open', () async {
@@ -388,20 +503,53 @@ void main() {
     expect(controller.lines.length, 6, reason: '窗口不该被拉长(否则回列表会多出卡片)');
   });
 
-  test('a task longer than the cap keeps only its newest lines', () {
+  test('trimToLiveWindow also shrinks by the byte budget', () {
     final controller = ScriptLogBrowserController(scriptName: 'demo');
+    const fourMb = 4 * 1024 * 1024;
+    // 同一天, 但每行声明 4MB → 10 行 40MB, 超过 32MB 软上限。
     controller.lines
       ..clear()
       ..addAll(<ScriptLogLine>[
-        for (var index = 0; index < kLogTaskMaxLines + 200; index++)
+        for (var index = 0; index < 10; index++)
+          ScriptLogLine(
+            fileName: '2026-11-02_demo.txt',
+            lineNo: index + 1,
+            offset: index * 10,
+            byteLength: fourMb,
+            text: 'line-$index',
+            lineTruncated: false,
+            task: '百鬼棋局',
+            taskStart: index == 0,
+          ),
+      ]);
+
+    controller.trimToLiveWindow();
+
+    expect(
+      controller.lines.length * fourMb,
+      lessThanOrEqualTo(kLogMaxRetainedBytes),
+      reason: '超过字节软上限就从最旧的一端收缩',
+    );
+    expect(controller.lines.last.text, 'line-9', reason: '最新的一行必须留着');
+    expect(controller.retainedLogDays.length, 1, reason: '仍然只有一天');
+  });
+
+  test('a long task keeps every line (no line cap)', () {
+    final controller = ScriptLogBrowserController(scriptName: 'demo');
+    const lineCount = 2500;
+    controller.lines
+      ..clear()
+      ..addAll(<ScriptLogLine>[
+        for (var index = 0; index < lineCount; index++)
           _line(index + 1, 'line-$index', task: '六道之门', start: index == 0),
       ]);
     final section = buildScriptLogSections(controller.lines).single;
 
     controller.openLogTask(section.key);
 
-    expect(controller.openedLogTaskLines.length, kLogTaskMaxLines);
-    expect(controller.openedLogTaskLines.first.text, 'line-200');
-    expect(controller.openedLogTaskLines.last.text, 'line-1199');
+    expect(controller.openedLogTaskLines.length, lineCount, reason: '不再按行数截断');
+    expect(controller.openedLogTaskLines.first.text, 'line-0');
+    expect(controller.openedLogTaskLines.last.text, 'line-${lineCount - 1}');
+    expect(controller.logRowCount, lineCount);
   });
 }

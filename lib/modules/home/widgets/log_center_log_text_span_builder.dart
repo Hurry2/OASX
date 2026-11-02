@@ -1,5 +1,14 @@
 part of 'log_center_panel.dart';
 
+/// Cache of built highlight spans, keyed by base style + line text.
+///
+/// 滚动时每一行都会重新 build；带高亮的 span 构建是 O(行长)，行一多就是可观的每帧开销。
+/// 缓存之后滚动基本只剩文本布局（键里带 style.hashCode，换主题会自动失效）。
+final Map<String, List<InlineSpan>> _spanCache = <String, List<InlineSpan>>{};
+
+/// Upper bound for [_spanCache]; the oldest entry is dropped when exceeded.
+const int _spanCacheLimit = 512;
+
 /// Builds highlighted spans for one log line without selectable text overhead.
 class _LogTextSpanBuilder {
   /// Creates one span builder.
@@ -11,9 +20,24 @@ class _LogTextSpanBuilder {
   /// Base style inherited by all generated spans.
   final TextStyle baseStyle;
 
-  /// Builds a compact set of spans for common log tokens.
+  /// Builds a compact set of spans for common log tokens (cached per text/style).
   List<InlineSpan> build() {
     final value = _trimTrailingBreaks(source);
+    final cacheKey = '${baseStyle.hashCode}|$value';
+    final cached = _spanCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+    final spans = _buildSpans(value);
+    if (_spanCache.length >= _spanCacheLimit) {
+      _spanCache.remove(_spanCache.keys.first);
+    }
+    _spanCache[cacheKey] = spans;
+    return spans;
+  }
+
+  /// Builds the span list for one line.
+  List<InlineSpan> _buildSpans(String value) {
     final spans = <InlineSpan>[];
     var plainStart = 0;
     var index = 0;

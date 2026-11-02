@@ -9,7 +9,7 @@ extension ScriptLogBrowserStreamX on ScriptLogBrowserController {
     final uri = ApiClient().buildScriptLogStreamUri(
       scriptName,
       cursor: liveCursor,
-      limitLines: kAutoScrollLogWindowLineLimit,
+      limitLines: kLogStreamLoadLines,
     );
     streamClient = ApiSseClient(
       url: uri,
@@ -81,9 +81,10 @@ extension ScriptLogBrowserStreamX on ScriptLogBrowserController {
         lines.addAll(freshLines);
         _lineKeys.addAll(freshLines.map((line) => line.key));
         for (final line in freshLines) {
+          // 增量维护宽度分数（只增不减是近似值，真正需要时会全量重算）。
           final score = _scoreScriptLogLineWidth(line.text);
-          if (score > maxLineWidthScore) {
-            maxLineWidthScore = score;
+          if (score > _maxLineWidthScore) {
+            _maxLineWidthScore = score;
           }
         }
         trimToLiveWindow();

@@ -1,6 +1,10 @@
 part of 'log_center_panel.dart';
 
 extension _LogCenterErrorDetailLogSectionX on LogCenterErrorDetailView {
+  /// 单行最多渲染这么多字符：文本布局对超长行极其昂贵（一行几百万字符会直接冻住界面）。
+  /// 完整内容仍然可以通过长按复制 / 保存报告拿到。
+  static const int _maxRenderedLineChars = 8192;
+
   /// Builds the log slivers with progressive state feedback.
   List<Widget> _buildLogSlivers(BuildContext context) {
     final lines = controller.selectedErrorLogLines;
@@ -24,7 +28,8 @@ extension _LogCenterErrorDetailLogSectionX on LogCenterErrorDetailView {
       }
       return const [SliverToBoxAdapter(child: SizedBox.shrink())];
     }
-    final widgets = <Widget>[
+    final wrapLines = controller.wrapLines.value;
+    return [
       if (preparing || controller.errorLogAppending.value)
         const SliverToBoxAdapter(
           child: Padding(
@@ -32,94 +37,33 @@ extension _LogCenterErrorDetailLogSectionX on LogCenterErrorDetailView {
             child: LinearProgressIndicator(minHeight: 2),
           ),
         ),
-    ];
-    if (controller.wrapLines.value) {
-      widgets.add(_buildWrappedLogSliver(context, lines));
-      return widgets;
-    }
-    widgets.add(_buildHorizontalLogSliver(context, lines));
-    return widgets;
-  }
-
-  /// Builds the wrapped vertical log sliver.
-  Widget _buildWrappedLogSliver(BuildContext context, List<String> lines) {
-    return SliverToBoxAdapter(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onLongPress: () => _openCopyDialog(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: lines.map((line) {
-            return Padding(
+      // 必须虚拟化: 报错日志可能有几万行（见过 19k 行 / 3MB 的），
+      // 用 Column 一次性构建会直接把界面卡死。
+      SliverList.builder(
+        itemCount: lines.length,
+        itemBuilder: (context, index) {
+          final line = lines[index];
+          final rendered = line.length > _maxRenderedLineChars
+              ? '${line.substring(0, _maxRenderedLineChars)} …'
+              : line;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () => _openCopyDialog(context),
+            child: Padding(
               padding: const EdgeInsets.only(right: 12),
               child: LogCenterLogText(
-                line: line,
-                maxLines: null,
-                overflow: TextOverflow.clip,
-                softWrap: true,
+                line: rendered,
+                maxLines: wrapLines ? null : 1,
+                overflow: wrapLines
+                    ? TextOverflow.clip
+                    : TextOverflow.visible,
+                softWrap: wrapLines,
               ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  /// Builds a selectable non-wrapped error log body.
-  Widget _buildSelectableHorizontalLogArea(
-    BuildContext context,
-    List<String> lines,
-    double width,
-  ) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onLongPress: () => _openCopyDialog(context),
-      child: SizedBox(
-        width: width,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: lines.map((line) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: LogCenterLogText(
-                line: line,
-                maxLines: 1,
-                overflow: TextOverflow.visible,
-                softWrap: false,
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  /// Builds the non-wrapped horizontal log area inside the vertical scroll flow.
-  Widget _buildHorizontalLogSliver(BuildContext context, List<String> lines) {
-    return SliverToBoxAdapter(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = _resolveContentWidth(
-            context,
-            constraints.maxWidth,
-            controller.selectedErrorLogMaxWidthScore.value,
-          );
-          return Scrollbar(
-            controller: detailHorizontalScrollController,
-            interactive: true,
-            thumbVisibility: width > constraints.maxWidth,
-            notificationPredicate: (notification) {
-              return notification.metrics.axis == Axis.horizontal;
-            },
-            child: SingleChildScrollView(
-              controller: detailHorizontalScrollController,
-              scrollDirection: Axis.horizontal,
-              child: _buildSelectableHorizontalLogArea(context, lines, width),
             ),
           );
         },
       ),
-    );
+    ];
   }
 
   /// Opens the dedicated copy dialog with the current error-detail log body.

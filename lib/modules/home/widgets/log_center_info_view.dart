@@ -1,5 +1,73 @@
 part of 'log_center_panel.dart';
 
+/// Cache of raw label → localized label, keyed by locale + label.
+final Map<String, String> _logLabelCache = <String, String>{};
+
+/// Looks [label] up in one translation [table], ignoring case; '' when missing.
+///
+/// Split out from [_localizedLogLabel] so the matching rule is unit testable without
+/// touching the GetX translation registry.
+String localizedLogLabelFrom(String label, Map<String, String> table) {
+  final trimmed = label.trim();
+
+  if (trimmed.isEmpty) {
+    return '';
+  }
+
+  final direct = table[trimmed];
+
+  if (direct != null) {
+    return direct;
+  }
+
+  final wanted = trimmed.toLowerCase();
+
+  for (final entry in table.entries) {
+    if (entry.key.toLowerCase() == wanted) {
+      return entry.value;
+    }
+  }
+
+  return '';
+}
+
+/// Localizes one task label that came from the log window.
+///
+/// Newer OAS builds already annotate lines with the localized name (`大富翁`), but
+/// older ones send the raw banner title in upper case (`DEMONENCOUNTER`). Look those
+/// up in the loaded dictionary case-insensitively so both ends render as Chinese.
+String _localizedLogLabel(String label) {
+  final trimmed = label.trim();
+
+  if (trimmed.isEmpty) {
+    return '';
+  }
+
+  final direct = trimmed.tr;
+
+  if (direct != trimmed) {
+    return direct;
+  }
+
+  final locale = Get.locale ?? Get.fallbackLocale ?? const Locale('zh', 'CN');
+  final cacheKey = '${locale.toString()}|${trimmed.toLowerCase()}';
+  final cached = _logLabelCache[cacheKey];
+
+  if (cached != null) {
+    return cached;
+  }
+
+  final table =
+      Get.translations[locale.toString()] ??
+      Get.translations['zh_CN'] ??
+      const <String, String>{};
+  final translated = localizedLogLabelFrom(trimmed, table);
+
+  _logLabelCache[cacheKey] = translated.isEmpty ? trimmed : translated;
+
+  return _logLabelCache[cacheKey]!;
+}
+
 /// Info log list: task cards, and the lines of the opened task.
 class LogCenterInfoView extends StatelessWidget {
   /// Creates the info log view.
@@ -92,6 +160,9 @@ class LogCenterInfoView extends StatelessWidget {
 
   Widget _buildVerticalList(BuildContext context, {required bool wrapLines}) {
     final rows = controller.logRows;
+    // 不换行时每行必然是同一高度 → 给 itemExtent, 滚动位置计算变成纯算术, 明显更跟手。
+    // 换行模式行高不定, 不能固定（否则折行的行会被裁掉）。
+    final rowExtent = wrapLines ? null : _singleLineRowExtent(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onLongPress: () => _openCopyDialog(context),
@@ -101,6 +172,7 @@ class LogCenterInfoView extends StatelessWidget {
           key: ValueKey<String>('log-info-${controller.scriptName}'),
           controller: scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          itemExtent: rowExtent,
           itemCount: rows.length,
           itemBuilder: (context, index) {
             final row = rows[index];
@@ -125,6 +197,8 @@ class LogCenterInfoView extends StatelessWidget {
     final range = _sectionTimeRange(section);
     final count = '${section.lineCount} ${I18n.homeLogSectionLines.tr}';
     final failure = controller.logTaskFailureMessage(section);
+    // 进程启动横幅不是任务，用独立图标标出来（保留卡片是为了能看出这里重启过）。
+    final isStart = isLogStartBanner(section);
     final subtitle = <String>[
       if (range != null) range,
       count,
@@ -135,10 +209,24 @@ class LogCenterInfoView extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       child: ListTile(
         dense: true,
-        title: Text(
-          _sectionLabel(section),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: Row(
+          children: [
+            if (isStart) ...[
+              Icon(
+                Icons.restart_alt_rounded,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text(
+                _sectionLabel(section),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         subtitle: Text(
           subtitle,
@@ -171,9 +259,10 @@ class LogCenterInfoView extends StatelessWidget {
 
   /// Builds the header with the back action while a task log is open.
   Widget _buildTaskHeader(BuildContext context) {
-    final label = controller.openedLogTaskLabel.value.trim().isEmpty
+    final openedLabel = _localizedLogLabel(controller.openedLogTaskLabel.value);
+    final label = openedLabel.isEmpty
         ? I18n.homeLogSectionUnknown.tr
-        : controller.openedLogTaskLabel.value;
+        : openedLabel;
     final failure = controller.openedLogTaskFailureMessage;
     return Padding(
       padding: const EdgeInsets.only(left: 2, bottom: 2),
@@ -203,11 +292,18 @@ class LogCenterInfoView extends StatelessWidget {
     );
   }
 
+  /// 不换行时一行日志的精确行高（文本行高 + 上下 1px 内边距 + 1px 余量）。
+  double _singleLineRowExtent(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium;
+    final fontSize = style?.fontSize ?? 14;
+    final heightFactor = style?.height ?? 1.4;
+    return fontSize * heightFactor + 3;
+  }
+
   /// Resolves one display label for a task section.
   String _sectionLabel(ScriptLogSection section) {
-    return section.label.trim().isEmpty
-        ? I18n.homeLogSectionUnknown.tr
-        : section.label;
+    final label = _localizedLogLabel(section.label);
+    return label.isEmpty ? I18n.homeLogSectionUnknown.tr : label;
   }
 
   /// Builds the `first ~ last` timestamp range of one task section.

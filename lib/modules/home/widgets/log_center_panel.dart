@@ -30,7 +30,7 @@ class LogCenterPanel extends StatefulWidget {
 
 class _LogCenterPanelState extends State<LogCenterPanel> {
   static const double _bottomThreshold = 80;
-  static const int _prefetchRemainingLines = 50;
+
   static const double _estimatedLineExtent = 22;
 
   final Object _viewportOwner = Object();

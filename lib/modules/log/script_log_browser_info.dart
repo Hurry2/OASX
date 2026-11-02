@@ -19,7 +19,6 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
       }
       applyFreshWindow(window);
       _shouldRefreshLatestOnInfoResume = false;
-      syncWindowLimitForMode();
       infoLoading.value = false;
       unawaited(startStream(requestId));
       syncBottomAfterFrame();
@@ -41,9 +40,12 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
 
   /// Loads older lines before the current first line.
   Future<void> prefetchOlder() async {
-    // 打开任务时不预取: 任务视图最多只显示最后 kLogTaskMaxLines 行, 预取来的
-    // 旧日志进不了这个视图, 却会让窗口不断变长 —— 回到卡片列表就会多出一堆卡片。
+    // 打开任务时不预取: 预取来的旧行只会在回到卡片列表后让窗口变长。
     if (isLogTaskOpened) {
+      return;
+    }
+    // 窗口已经覆盖到要保留的天数（两天）就不再往回取。
+    if (logWindowCoversRetention) {
       return;
     }
     final cursor = olderCursor;
@@ -65,9 +67,8 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
       );
       if (isOlderLoadActive(requestId)) {
         prependOlderWindow(window);
-        syncWindowLimitForMode();
-        // 刚拉回来的旧内容不能被立刻裁掉(否则这次请求等于白做, 还会再触发预取)。
-        trimToLiveWindow(keepOlder: true);
+        // 保留策略按天: 超出两天的部分在这里被裁掉（包括刚拉回来但超出的页）。
+        trimToLiveWindow();
       }
     } catch (error) {
       if (isOlderLoadActive(requestId)) {
