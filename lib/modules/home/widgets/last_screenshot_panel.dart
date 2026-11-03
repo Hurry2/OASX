@@ -12,6 +12,52 @@ import 'package:oasx/modules/home/models/last_screenshot_meta.dart';
 import 'package:oasx/service/websocket_service.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
+/// 最近一帧及其元数据，按"频道"（后端地址 + 配置名）缓存。
+///
+/// 面板会因为布局变化被销毁重建（例如收起/恢复右侧栏、切换布局模式），而这些状态原本
+/// 是 State 私有的 → 重建后先是"空"，要等后端推下一帧才有画面（脚本已停时可能永远等不到）。
+/// 缓存放在模块级，重建时直接恢复上一帧。
+final Map<String, Uint8List> _lastFrameByChannel = <String, Uint8List>{};
+final Map<String, LastScreenshotMeta> _lastMetaByChannel =
+    <String, LastScreenshotMeta>{};
+final Map<String, double> _lastAspectByChannel = <String, double>{};
+
+/// 频道缓存上限：每个配置一帧（1280×720 的图约几百 KB），只留最近用过的几个。
+const int _frameCacheLimit = 4;
+
+/// 正在关闭中的频道 → 关闭 Future。
+///
+/// 重建后的新实例在 `connect` 之前必须先等它落地：`WebSocketService.connect` 在连接仍
+/// 报 connected 时会**复用**同一条客户端，若旧实例的 close 晚一步到达，就会把新实例刚挂上
+/// 的监听一并清掉，画面从此永久为空。收起/恢复右侧栏正是"销毁 → 紧接着重建"这条路径。
+final Map<String, Future<void>> _pendingCloseByChannel = <String, Future<void>>{};
+
+/// 记录一帧到频道缓存，并按上限淘汰最旧的条目。
+void _rememberLiveFrame(String channel, Uint8List frame) {
+  _lastFrameByChannel.remove(channel);
+  _lastFrameByChannel[channel] = frame;
+  while (_lastFrameByChannel.length > _frameCacheLimit) {
+    final oldest = _lastFrameByChannel.keys.first;
+    _lastFrameByChannel.remove(oldest);
+    _lastMetaByChannel.remove(oldest);
+    _lastAspectByChannel.remove(oldest);
+  }
+}
+
+/// 该频道确认没有画面（后端推了 empty）。
+void _forgetLiveFrame(String channel) {
+  _lastFrameByChannel.remove(channel);
+}
+
+/// 记录该频道最近一帧的元数据 / 宽高比。
+void _rememberLiveMeta(String channel, LastScreenshotMeta meta) {
+  _lastMetaByChannel[channel] = meta;
+}
+
+void _rememberLiveAspect(String channel, double aspectRatio) {
+  _lastAspectByChannel[channel] = aspectRatio;
+}
+
 /// Shows what the script is currently looking at for one config.
 ///
 /// Frames arrive over a WebSocket from OAS's image service, which already holds
@@ -86,6 +132,8 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
   void initState() {
     super.initState();
     _collapsed = _readCollapsed();
+    // 布局变化导致的重建：先把上一帧捡回来，避免"空画面"闪一下（甚至一直空着）。
+    _restoreCachedFrame();
     if (!_collapsed) {
       _connectLive();
     }
@@ -94,6 +142,14 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
         setState(() {});
       }
     });
+  }
+
+  /// Seeds the panel from the channel cache kept across rebuilds.
+  void _restoreCachedFrame() {
+    final channel = _liveChannelName(widget.scriptName);
+    _liveFrame = _lastFrameByChannel[channel];
+    _meta = _lastMetaByChannel[channel];
+    _aspectRatio = _lastAspectByChannel[channel];
   }
 
   @override
@@ -142,19 +198,35 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
       return;
     }
     // Deferred: reconnecting mutates state, which build must not do.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // 先 await 旧流的关闭，再连接：否则晚到的 close 会把新挂上的监听清掉。
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _collapsed || _liveChannel == expected) {
         return;
       }
-      unawaited(_disconnectLive());
       setState(_clearFrame);
-      _connectLive();
+      await _disconnectLive();
+      if (!mounted || _collapsed) {
+        return;
+      }
+      await _connectLive();
     });
   }
 
   /// Opens the live stream that keeps the preview in sync with the script.
   Future<void> _connectLive() async {
     final channel = _liveChannelName(widget.scriptName);
+    // 旧实例可能刚发起过 close；先等它落地，否则它的 close 会清掉我们马上要挂的监听。
+    final pendingClose = _pendingCloseByChannel[channel];
+    if (pendingClose != null) {
+      try {
+        await pendingClose;
+      } catch (_) {
+        // 关闭失败不影响本次重连。
+      }
+    }
+    if (!mounted) {
+      return;
+    }
     _liveChannel = channel;
     final service = Get.find<WebSocketService>();
     // Listeners are keyed by name, so stale ones have to go before reconnecting.
@@ -188,6 +260,20 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
     if (channel == null) {
       return;
     }
+    // 登记这次关闭：重建出来的新实例会先等它完成，避免竞态清掉新监听。
+    final pending = _closeChannel(channel);
+    _pendingCloseByChannel[channel] = pending;
+    try {
+      await pending;
+    } finally {
+      if (identical(_pendingCloseByChannel[channel], pending)) {
+        _pendingCloseByChannel.remove(channel);
+      }
+    }
+  }
+
+  /// Closes one channel, mapping failures to a non-throwing future.
+  Future<void> _closeChannel(String channel) async {
     try {
       await Get.find<WebSocketService>().close(channel);
     } catch (e) {
@@ -204,6 +290,11 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
     if (message is List<int>) {
       final meta = _pendingLiveMeta;
       final frame = Uint8List.fromList(message);
+      final channel = _liveChannelName(widget.scriptName);
+      _rememberLiveFrame(channel, frame);
+      if (meta != null) {
+        _rememberLiveMeta(channel, meta);
+      }
       setState(() {
         _liveFrame = frame;
         if (meta != null) {
@@ -222,6 +313,9 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
     }
     if (decoded['event'] == 'empty') {
       // This config never produced a frame, i.e. the script never started.
+      final channel = _liveChannelName(widget.scriptName);
+      _forgetLiveFrame(channel);
+      _rememberLiveMeta(channel, const LastScreenshotMeta.empty());
       setState(() {
         _liveFrame = null;
         _meta = const LastScreenshotMeta.empty();
@@ -315,6 +409,8 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
         return;
       }
       final ratio = width / height;
+      // 也写进频道缓存：重建后直接就有正确的宽高比，画面不会先被拉伸一下。
+      _rememberLiveAspect(_liveChannelName(widget.scriptName), ratio);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _aspectRatio == ratio) {
           return;

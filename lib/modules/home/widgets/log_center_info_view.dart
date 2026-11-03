@@ -194,8 +194,13 @@ class LogCenterInfoView extends StatelessWidget {
 
   /// Builds one tappable task card that opens the task log.
   Widget _buildTaskCard(BuildContext context, ScriptLogSection section) {
-    final range = _sectionTimeRange(section);
-    final count = '${section.lineCount} ${I18n.homeLogSectionLines.tr}';
+    // 卡片上展示的行数与时间范围都按"点进去实际会看到的部分"算：
+    // 任务视图只保留最近 kLogTaskMaxLines 行，直接写 section.lineCount 会出现
+    // 卡片 10000 行、点开只有 1000 行的不一致。
+    final shown = controller.shownLogTaskLineRange(section);
+    final range = _sectionTimeRange(section, firstIndex: shown.start);
+    final count =
+        '${shown.end - shown.start + 1} ${I18n.homeLogSectionLines.tr}';
     final failure = controller.logTaskFailureMessage(section);
     // 进程启动横幅不是任务，用独立图标标出来（保留卡片是为了能看出这里重启过）。
     final isStart = isLogStartBanner(section);
@@ -313,13 +318,17 @@ class LogCenterInfoView extends StatelessWidget {
   }
 
   /// Builds the `first ~ last` timestamp range of one task section.
-  String? _sectionTimeRange(ScriptLogSection section) {
+  ///
+  /// [firstIndex] 覆盖范围起点（卡片只展示任务视图真正会渲染的那一段）。
+  String? _sectionTimeRange(ScriptLogSection section, {int? firstIndex}) {
     final lines = controller.lines;
-    if (section.firstIndex >= lines.length ||
+    final start = firstIndex ?? section.firstIndex;
+    if (start >= lines.length ||
+        section.firstIndex >= lines.length ||
         section.lastIndex >= lines.length) {
       return null;
     }
-    final first = _leadingTimestamp(lines[section.firstIndex].text);
+    final first = _leadingTimestamp(lines[start].text);
     final last = _leadingTimestamp(lines[section.lastIndex].text);
     if (first == null && last == null) {
       return null;

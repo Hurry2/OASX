@@ -575,5 +575,25 @@ void main() {
     expect(controller.openedLogTaskLines.first.text, 'line-1500');
     expect(controller.openedLogTaskLines.last.text, 'line-2499');
     expect(controller.logRowCount, kLogTaskMaxLines);
+
+    // 卡片上的"行数/时间范围"必须与点进去看到的一致：
+    // 否则会把窗口上限（10000）当成任务行数写在卡片上，点开却只有 1000 行。
+    final shown = controller.shownLogTaskLineRange(section);
+    expect(shown.start, 1500, reason: '起点就是任务视图真正渲染的第一行');
+    expect(shown.end, lineCount - 1);
+    expect(shown.end - shown.start + 1, controller.openedLogTaskLines.length);
+  });
+
+  test('a short task reports exactly what the detail will render', () {
+    final controller = _controllerWithTasks();
+    final section = controller.allLogSections.firstWhere(
+      (item) => item.lineCount == 4,
+    );
+
+    final shown = controller.shownLogTaskLineRange(section);
+
+    expect(shown.start, section.firstIndex, reason: '没超出上限时就整段展示');
+    expect(shown.end, section.lastIndex);
+    expect(shown.end - shown.start + 1, section.lineCount);
   });
 }

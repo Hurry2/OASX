@@ -16,6 +16,7 @@ import 'package:oasx/service/app_update/installers/windows_update_installer.dart
 import 'package:oasx/service/app_update/models/app_update_plan.dart';
 import 'package:oasx/service/app_update/update_package_io.dart';
 import 'package:oasx/translation/i18n_content.dart';
+import 'package:oasx/utils/logger.dart';
 import 'package:oasx/utils/platform_utils.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -58,16 +59,26 @@ class AppUpdateService extends GetxService {
       final releaseResult = await _fetchLatestReleaseResult();
       final release = releaseResult.data;
       if (!releaseResult.isSuccess || release == null || !release.isValid) {
+        final message = _buildUpdateCheckFailureMessage(releaseResult);
+        // 落盘：更新检查失败只弹 snackbar 的话，事后完全查不到原因。
+        logger.w('update check failed: $message');
         if (showTip) {
-          Get.snackbar(
-              I18n.tip.tr, _buildUpdateCheckFailureMessage(releaseResult));
+          Get.snackbar(I18n.tip.tr, message);
         }
         return;
       }
       await _writeLastUpdateCheckAt();
       final currentVersion = await AppVersionUtils.getCurrentVersion();
       final latestVersion = release.version ?? 'v0.0.0';
-      if (!AppVersionUtils.compareVersion(currentVersion, latestVersion)) {
+      final hasUpdate = AppVersionUtils.compareVersion(
+        currentVersion,
+        latestVersion,
+      );
+      logger.i(
+        'update check ok: current=$currentVersion latest=$latestVersion '
+        'hasUpdate=$hasUpdate',
+      );
+      if (!hasUpdate) {
         if (showTip) {
           Get.snackbar(I18n.tip.tr, I18n.noNewVersion.tr);
         }
@@ -234,18 +245,21 @@ class AppUpdateService extends GetxService {
     return I18n.updateCheckFailed.tr;
   }
 
-  /// Fetches the latest release through proxy when configured, otherwise direct.
+  /// Fetches the latest release through the dedicated updater client.
+  ///
+  /// 之前无代理时走 `ApiClient()`（共享 dio：connectTimeout 仅 3 秒 + HTTP 缓存拦截器），
+  /// 境外地址很容易误报"检查更新失败"；现在无论有没有代理都用同一套裸 HttpClient。
   Future<ApiResult<GithubReleaseModel>> _fetchLatestReleaseResult() async {
     final proxyUrl = _readProxyUrl();
-    if (proxyUrl.isEmpty) {
-      return ApiClient().getGithubReleaseResult();
-    }
     try {
       final json = await UpdatePackageIo.fetchJsonMap(
         updateUrlGithub,
-        proxyUrl: proxyUrl,
+        proxyUrl: proxyUrl.isEmpty ? null : proxyUrl,
       );
       final release = GithubReleaseModel.fromJson(json);
+      if (!release.isValid) {
+        return ApiResult<GithubReleaseModel>.failure('invalid_release_payload');
+      }
       return ApiResult<GithubReleaseModel>.success(release);
     } catch (error) {
       final message = error is HttpException ? error.message : error.toString();

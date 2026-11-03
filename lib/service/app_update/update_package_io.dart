@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -31,26 +32,34 @@ class UpdateDownloadCancelledException implements Exception {
 /// Handles download and checksum work for app update packages.
 class UpdatePackageIo {
   /// Fetches a JSON object from [url] with optional proxy support.
+  ///
+  /// 故意用裸 `HttpClient` 而不是应用共享的 dio：后者 `connectTimeout` 只有 3 秒
+  /// （局域网够用，但 api.github.com 这种境外地址 TLS 握手经常更久 → 误报"检查更新失败"），
+  /// 而且会经过 HTTP 缓存拦截器。这里还带一个总超时兜底。
   static Future<Map<String, dynamic>> fetchJsonMap(
     String url, {
     String? proxyUrl,
+    Duration timeout = const Duration(seconds: 20),
   }) async {
     final httpClient = HttpClient();
     _configureProxy(httpClient, proxyUrl);
     try {
-      final request = await httpClient.getUrl(Uri.parse(url));
-      final response = await request.close();
+      final request = await httpClient.getUrl(Uri.parse(url)).timeout(timeout);
+      request.headers.set(HttpHeaders.userAgentHeader, 'OASX');
+      final response = await request.close().timeout(timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException('request_failed_${response.statusCode}');
       }
-      final body = await utf8.decoder.bind(response).join();
+      final body = await utf8.decoder.bind(response).join().timeout(timeout);
       final decoded = jsonDecode(body);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('invalid_json_payload');
       }
       return decoded;
+    } on TimeoutException {
+      throw const HttpException('request_timeout');
     } finally {
-      httpClient.close();
+      httpClient.close(force: true);
     }
   }
 

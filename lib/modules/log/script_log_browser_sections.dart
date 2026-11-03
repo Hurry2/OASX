@@ -239,6 +239,18 @@ extension ScriptLogBrowserSectionsX on ScriptLogBrowserController {
     openedLogTaskLines.assignAll(_linesOfSection(section));
   }
 
+  /// 任务视图里**实际**会展示的行范围（只保留最近 [kLogTaskMaxLines] 行）。
+  ///
+  /// 卡片上的"行数"和"时间范围"都用它来算，才能与点进去看到的内容一致：
+  /// 否则卡片会写"10000 行"、点开却只有 1000 行 ✗（窗口上限 10000，任务视图上限 1000）。
+  ({int start, int end}) shownLogTaskLineRange(ScriptLogSection section) {
+    final cappedStart = section.lastIndex - kLogTaskMaxLines + 1;
+    final start = cappedStart > section.firstIndex
+        ? cappedStart
+        : section.firstIndex;
+    return (start: start, end: section.lastIndex);
+  }
+
   /// Lines shown for one section: the newest [kLogTaskMaxLines] lines of it.
   ///
   /// 卡片可以覆盖很多任务，但单个任务点进去只看最近 [kLogTaskMaxLines] 行
