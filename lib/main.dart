@@ -96,7 +96,15 @@ class GlobalBehavior extends MaterialScrollBehavior {
 }
 
 Future<void> initService() async {
+  final startupWatch = Stopwatch()..start();
   await GetStorage.init();
+  final storageMs = startupWatch.elapsedMilliseconds;
+
+  // 日志必须最先就绪：后面的每个服务（以及它们内部构造的 ApiClient）都可能写日志，
+  // 而 logger 曾是 late 变量 → 早期写日志会抛 LateInitializationError 直接让 App 起不来。
+  final loggerWatch = Stopwatch()..start();
+  await initLogger();
+  final loggerMs = loggerWatch.elapsedMilliseconds;
 
   Get.put(SettingsController(), permanent: true);
   Get.put(AppExitService(), permanent: true);
@@ -106,14 +114,29 @@ Future<void> initService() async {
   Get.lazyPut<WebSocketService>(() => WebSocketService(), fenix: true);
   final windowService = Get.put(WindowService());
 
+  // 逐个计时：启动变慢时能直接看出是哪个服务在拖。
+  final serviceMs = <String, int>{'logger': loggerMs};
+  Future<T> timed<T>(String name, Future<T> future) async {
+    final watch = Stopwatch()..start();
+    try {
+      return await future;
+    } finally {
+      serviceMs[name] = watch.elapsedMilliseconds;
+    }
+  }
+
   await Future.wait([
-    initLogger(),
-    Get.putAsync(() async => LocaleService()),
-    Get.putAsync(() async => ThemeService()),
-    Get.putAsync(() async => AutoStartService(), permanent: true),
-    Get.putAsync(() async => AppUpdateService(), permanent: true),
-    windowService.ready,
-    Get.putAsync(() async => ScriptService(), permanent: true),
-    Get.putAsync(() async => StorageStatsPrefsService(), permanent: true),
+    timed('locale', Get.putAsync(() async => LocaleService())),
+    timed('theme', Get.putAsync(() async => ThemeService())),
+    timed('autostart', Get.putAsync(() async => AutoStartService(), permanent: true)),
+    timed('update', Get.putAsync(() async => AppUpdateService(), permanent: true)),
+    timed('windowReady', windowService.ready),
+    timed('script', Get.putAsync(() async => ScriptService(), permanent: true)),
+    timed('storagePrefs', Get.putAsync(() async => StorageStatsPrefsService(), permanent: true)),
   ]);
+  logger.i(
+    '[startup] storage=${storageMs}ms '
+    '${serviceMs.entries.map((entry) => '${entry.key}=${entry.value}ms').join(' ')} '
+    'total=${startupWatch.elapsedMilliseconds}ms',
+  );
 }

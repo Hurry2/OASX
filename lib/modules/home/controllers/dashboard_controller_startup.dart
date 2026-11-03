@@ -75,10 +75,25 @@ extension HomeDashboardStartupX on HomeDashboardController {
         return;
       }
       startupLoadingMessage.value = I18n.homeLoadingAutoLogin;
+      final startupWatch = Stopwatch()..start();
       final connected = await ApiClient().testAddress();
+      logger.i(
+        '[startup] testAddress connected=$connected '
+        'in ${startupWatch.elapsedMilliseconds}ms',
+      );
       if (connected) {
+        final scriptsWatch = Stopwatch()..start();
         await _refreshScriptsAfterConnected(triggerAutoRun: triggerAutoRun);
+        logger.i(
+          '[startup] scripts loaded in ${scriptsWatch.elapsedMilliseconds}ms',
+        );
+        final translationsWatch = Stopwatch()..start();
         await _refreshTranslationsAfterLogin();
+        logger.i(
+          '[startup] translations loaded in '
+          '${translationsWatch.elapsedMilliseconds}ms '
+          '(login total ${startupWatch.elapsedMilliseconds}ms)',
+        );
         return;
       }
 

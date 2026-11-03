@@ -30,6 +30,12 @@ class AppWallpaper extends StatelessWidget {
       final scrim = Theme.of(
         context,
       ).colorScheme.surface.withValues(alpha: themeService.wallpaperDim);
+      // 壁纸可能是几 MB 的大图（实测见过 2.85MB / 千万像素级），按窗口物理像素解码：
+      // 解码更快、常驻内存也从"原图尺寸"降到"屏幕尺寸"。
+      final mediaQuery = MediaQuery.of(context);
+      final decodeWidth = (mediaQuery.size.width * mediaQuery.devicePixelRatio)
+          .round()
+          .clamp(640, 2560);
       return Stack(
         children: [
           Positioned.fill(
@@ -38,6 +44,7 @@ class AppWallpaper extends StatelessWidget {
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
+              cacheWidth: decodeWidth,
             ),
           ),
           Positioned.fill(child: ColoredBox(color: scrim)),

@@ -18,6 +18,7 @@ import 'package:oasx/modules/server/models/deploy_webui_config.dart';
 import 'package:oasx/translation/i18n.dart';
 import 'package:oasx/translation/i18n_content.dart';
 import 'package:oasx/api/github_release_model.dart';
+import 'package:oasx/utils/logger.dart';
 
 import './home_model.dart';
 import './update_info_model.dart';
@@ -86,7 +87,23 @@ class ApiClient {
 
   late final CacheOptions _cacheOptions;
 
+  /// 客户端构造耗时（毫秒）。
+  ///
+  /// 登录前的第一个请求实测要 700ms 上下（同一个 /test 用 curl 冷连接只要 ~46ms），
+  /// 所以把"构造"与"首个请求"分开量。这里只**记录**、不在构造函数里写日志 ——
+  /// `logger` 是 late 变量，而客户端可能在 `initLogger()` 之前就被构造
+  /// （`SettingsController` 就会），在构造里写日志会抛 LateInitializationError
+  /// 让 App 直接起不来（踩过）。真正打日志的地方是 [testAddress]，那时 logger 一定就绪。
+  int initMilliseconds = 0;
+
   ApiClient._internal() {
+    final watch = Stopwatch()..start();
+    _configure();
+    initMilliseconds = watch.elapsedMilliseconds;
+  }
+
+  /// 真正的客户端初始化（缓存存储、拦截器、基址）。
+  void _configure() {
     final temporaryDirectory =
         GetStorage().read(StorageKey.temporaryDirectory.name) ?? '';
     final cacheStore = kIsWeb
@@ -194,7 +211,12 @@ class ApiClient {
   }
 
   Future<bool> testAddress() async {
+    final watch = Stopwatch()..start();
     final res = await request(() => get('/test'), onError: (msg, code) {});
+    logger.i(
+      '[startup] GET /test in ${watch.elapsedMilliseconds}ms '
+      '(client init ${initMilliseconds}ms)',
+    );
     return res.isSuccess && res.data == 'success';
   }
 

@@ -6,7 +6,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:logger/logger.dart';
 
-late Logger logger;
+/// Application logger.
+///
+/// 故意给一个**可用的默认实现**而不是 `late`：启动早期（任何服务初始化之前）也可能有人写日志，
+/// `late` 会直接抛 LateInitializationError 让整个 App 起不来 —— 曾经因为在 `ApiClient`
+/// 的构造函数里写日志而踩过（Logger 是 late，而 SettingsController 会在 initLogger() 之前
+/// 构造 ApiClient）。真正落盘的文件日志仍由 [initLogger] 换上。
+Logger logger = _getWebLogger();
 
 Future<void> initLogger() async {
   if (kIsWeb) {

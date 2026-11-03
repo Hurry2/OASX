@@ -77,6 +77,11 @@ class WindowService extends GetxService with WindowListener {
     if (!PlatformUtils.isDesktop) {
       return;
     }
+    // 1.0 = 完全不透明，也就是默认值：这时别白打一次原生调用 ——
+    // 它挂在窗口就绪之前的关键路径上（启动实测 windowReady ≈ 331ms）。
+    if (windowOpacity.value >= 1.0) {
+      return;
+    }
     try {
       await windowManager.setOpacity(windowOpacity.value);
     } catch (e) {
