@@ -124,14 +124,17 @@ class UpdatePackageIo {
     return digest.split(':').last.trim().toLowerCase();
   }
 
-  /// Applies an optional proxy URL to the given [httpClient].
+  /// Applies a proxy URL to the given [httpClient]; falls back to a direct
+  /// connection when none (or an unusable one) is configured.
+  ///
+  /// 这里的直连是**局部**的：OASX 不再全局强制直连（那会牵连所有请求），
+  /// 也让后端地址切换后无法按需走代理），只有更新相关请求自己决定走不走代理。
   static void _configureProxy(HttpClient httpClient, String? proxyUrl) {
     final raw = proxyUrl?.trim() ?? '';
-    if (raw.isEmpty) {
-      return;
-    }
-    final uri = Uri.tryParse(raw);
+    final uri = raw.isEmpty ? null : Uri.tryParse(raw);
     if (uri == null || uri.host.isEmpty) {
+      // 没配有效代理就直连：系统的代理软件可能指向已关闭的端口。
+      httpClient.findProxy = (_) => 'DIRECT';
       return;
     }
     final port = uri.port > 0 ? uri.port : 80;
