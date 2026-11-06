@@ -30,10 +30,22 @@ class ScriptService extends GetxService {
   final scriptOrderList = <String>[].obs;
   final autoScriptList = <String>[].obs;
 
-  /// 用户拖动排序后的配置顺序，持久化在本地。
+  /// 用户拖动排序后的配置顺序，持久化在本地 —— **按后端地址分别保存**。
   ///
   /// 后端 `/config_list` 只按文件名返回，顺序不受 OASX 控制，所以每次同步
   /// 服务端列表后都要用它重新排一遍，否则自定义顺序会被刷新冲掉。
+  ///
+  /// 同一台设备会切换局域网里的多台 OAS，各自的配置名往往不同；共用一份排序时，
+  /// 切到另一台会因"和当前配置名零重叠"被判为陈旧并覆盖落盘，切回来就没了。
+  /// 现在地址 → 顺序各存一份，[_customScriptOrder] 始终是"当前后端那一份"。
+  final _customScriptOrders = <String, List<String>>{};
+
+  /// [_customScriptOrder] 当前对应哪个后端（空 = 还没对上）。
+  String _customScriptOrderBackend = '';
+
+  /// 当前后端地址，用来区分不同 OAS 的排序。
+  String get _currentBackendKey => ApiClient().baseAddress.trim();
+
   final _customScriptOrder = <String>[];
 
   bool get _shouldSkipBackendReload {
@@ -100,6 +112,9 @@ class ScriptService extends GetxService {
   }
 
   void syncScriptOrder(Iterable<String> scripts) {
+    // 换了后端（局域网里切 OAS）就把内存里的排序换成那台机器自己的那份，
+    // 否则下面"陈旧判定"会拿另一台的顺序去覆盖它。
+    _selectCustomScriptOrderForCurrentBackend();
     final source = <String>[
       for (final name in scripts)
         if (name.trim().isNotEmpty) name.trim(),

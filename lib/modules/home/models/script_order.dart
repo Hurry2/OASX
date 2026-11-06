@@ -1,9 +1,15 @@
 // Pure helpers behind the user-defined config order in the left sidebar.
 //
-// Kept free of any import on purpose: this machine cannot run `flutter analyze`
-// nor spawn any Dart tool that starts a subprocess, but `dart run <file>.dart`
-// works as long as the file does not transitively import Flutter. Keeping the
-// ordering math here means it can actually be executed and verified.
+// Kept free of any Flutter import on purpose: this machine cannot run `flutter
+// analyze` nor spawn any Dart tool that starts a subprocess, but `dart run
+// <file>.dart` works as long as the file does not transitively import Flutter.
+// Keeping the ordering math here means it can actually be executed and verified.
+//
+// 顺序**按后端地址分别保存**：同一台设备会切换局域网里的多台 OAS，各自的配置名
+// 往往不同。若共用一份，切到另一台时会因为"和当前配置名零重叠"被判为陈旧并覆盖
+// 落盘，切回来自定义顺序就没了。
+
+import 'dart:convert';
 
 /// Applies the user-defined order [customOrder] on top of the server order.
 ///
@@ -33,6 +39,68 @@ List<String> applyCustomScriptOrder(
     }
   }
   return result;
+}
+
+/// Reads the persisted per-backend order.
+///
+/// 兼容三种历史写法：
+/// * 后端地址 → 列表的 Map（当前格式）；
+/// * 上述 Map 的 JSON 字符串；
+/// * 旧版：列表或列表的 JSON 字符串 —— 整份迁移到 [currentBackend]。
+Map<String, List<String>> parseScriptOrderStorage(
+  dynamic raw, {
+  required String currentBackend,
+}) {
+  List<String> normalize(Iterable<dynamic> values) => <String>[
+    for (final value in values)
+      if (value.toString().trim().isNotEmpty) value.toString().trim(),
+  ];
+
+  dynamic decoded = raw;
+  if (raw is String) {
+    try {
+      decoded = raw.trim().isEmpty ? null : jsonDecode(raw);
+    } catch (_) {
+      decoded = null;
+    }
+  }
+
+  final result = <String, List<String>>{};
+  if (decoded is Map) {
+    for (final entry in decoded.entries) {
+      final backend = entry.key.toString().trim();
+      final value = entry.value;
+      if (backend.isEmpty || value is! List) {
+        continue;
+      }
+      final order = normalize(value);
+      if (order.isNotEmpty) {
+        result[backend] = order;
+      }
+    }
+    return result;
+  }
+
+  final backend = currentBackend.trim();
+  if (decoded is List && backend.isNotEmpty) {
+    final order = normalize(decoded);
+    if (order.isNotEmpty) {
+      result[backend] = order;
+    }
+  }
+  return result;
+}
+
+/// Order stored for one backend; empty when it never dragged anything there.
+List<String> scriptOrderForBackend(
+  Map<String, List<String>> orders,
+  String backend,
+) {
+  final key = backend.trim();
+  if (key.isEmpty) {
+    return const <String>[];
+  }
+  return orders[key] ?? const <String>[];
 }
 
 /// Whether [customOrder] shares no name with [names].

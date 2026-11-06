@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oasx/modules/home/models/script_order.dart';
 
@@ -116,6 +118,82 @@ void main() {
         ),
         ['A', 'B'],
       );
+    });
+  });
+
+  group('per-backend script order', () {
+    // 同一台设备切换局域网里的多台 OAS：各自的配置名不同，排序必须各存一份，
+    // 否则切走再切回来时自定义顺序会被另一台的顺序覆盖掉（用户报告的 bug）。
+    test('keeps one order per backend and never overwrites another', () {
+      const backendA = 'http://192.168.1.9:22288';
+      const backendB = 'http://192.168.1.10:22288';
+      const backendC = 'http://192.168.1.11:22288';
+
+      final stored = <String, List<String>>{
+        backendA: ['模拟器01大号', '模拟器02随区'],
+        backendB: ['设备A', '设备B'],
+        backendC: ['机台一'],
+      };
+      final encoded = jsonEncode(stored);
+      final parsed = parseScriptOrderStorage(
+        encoded,
+        currentBackend: backendA,
+      );
+
+      expect(parsed.length, 3, reason: '三台后端各有一份');
+      expect(scriptOrderForBackend(parsed, backendA), ['模拟器01大号', '模拟器02随区']);
+      expect(scriptOrderForBackend(parsed, backendB), ['设备A', '设备B']);
+      expect(scriptOrderForBackend(parsed, backendC), ['机台一']);
+    });
+
+    test('returns an empty order for a backend that has none', () {
+      final parsed = parseScriptOrderStorage(
+        jsonEncode({
+          'http://192.168.1.9:22288': ['A'],
+        }),
+        currentBackend: 'http://192.168.1.9:22288',
+      );
+
+      expect(
+        scriptOrderForBackend(parsed, 'http://192.168.1.50:22288'),
+        isEmpty,
+      );
+    });
+
+    test('migrates the legacy flat list to the current backend', () {
+      // 旧版只存了一个列表，没有任何后端信息 → 整份归到当前后端，不能丢。
+      final parsed = parseScriptOrderStorage(
+        ['A', 'B'],
+        currentBackend: 'http://192.168.1.9:22288',
+      );
+
+      expect(parsed.length, 1);
+      expect(
+        scriptOrderForBackend(parsed, 'http://192.168.1.9:22288'),
+        ['A', 'B'],
+      );
+    });
+
+    test('migrates the legacy JSON-string list', () {
+      final parsed = parseScriptOrderStorage(
+        jsonEncode(['A', 'B']),
+        currentBackend: 'http://192.168.1.9:22288',
+      );
+
+      expect(
+        scriptOrderForBackend(parsed, 'http://192.168.1.9:22288'),
+        ['A', 'B'],
+      );
+    });
+
+    test('ignores garbage instead of throwing', () {
+      for (final raw in <dynamic>[null, '', 'not json', 42, {'': ['A']}]) {
+        expect(
+          parseScriptOrderStorage(raw, currentBackend: 'b').values,
+          isNot(contains(<String>['A'])),
+          reason: '脏数据应被忽略（raw=$raw）',
+        );
+      }
     });
   });
 }
