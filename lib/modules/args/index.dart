@@ -16,6 +16,7 @@ import 'package:oasx/api/api_client.dart';
 import 'package:oasx/modules/common/models/config_drag_payload.dart';
 import 'package:oasx/modules/common/widgets/drag_copy_feedback.dart';
 import 'package:oasx/service/websocket_service.dart';
+import 'package:oasx/utils/group_translate.dart';
 import 'package:oasx/utils/platform_utils.dart';
 import 'package:styled_widget/styled_widget.dart';
 
@@ -135,7 +136,7 @@ class _ArgsState extends State<Args> {
       title: <Widget>[
         if (widget.groupDraggable)
           _buildGroupDragHandle(context, selectedScript, selectedTask, name),
-        Text(name.tr),
+        Text(name.trGroup),
       ].toRow(
         mainAxisAlignment: MainAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -331,7 +332,7 @@ class _ArgsState extends State<Args> {
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
             child: Center(
               child: Text(
-                name.tr,
+                name.trGroup,
                 textAlign: TextAlign.center,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
