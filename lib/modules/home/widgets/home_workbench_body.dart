@@ -42,20 +42,11 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
   /// Remembers the collection width at which the right-side collapse was committed.
   double? _forcedTwoPaneCollectionWidth;
 
-  /// Tracks whether the left divider is actively dragging.
-  bool _isDraggingLeftDivider = false;
-
   /// Remembers the latest width resolved by the current layout pass.
   double? _lastResolvedWidth;
 
   /// Remembers the latest collection width resolved by the current layout pass.
   double? _lastResolvedCollectionWidth;
-
-  /// Stores a live collection width while the left divider is actively dragging.
-  double? _dragCollectionWidth;
-
-  /// Stores the raw collection width target while the left divider is dragging.
-  double? _dragTargetCollectionWidth;
 
   /// Stores a live split ratio while the divider is actively dragging.
   double? _dragSplitRatio;
@@ -131,45 +122,45 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
     });
   }
 
-  /// Builds the shared desktop skeleton so left-divider drags survive layout changes.
+  /// Builds the desktop skeleton with a top horizontal config bar and split panes below.
   Widget _buildDesktopLayout({
     required HomeWorkbenchLayout layout,
     required Widget collection,
     required Widget details,
   }) {
     final isThreePane = layout.mode == HomeWorkbenchLayoutMode.threePane;
-    return Row(
+    return Column(
       key: const ValueKey<String>('home-workbench-desktop'),
       children: [
-        SizedBox(width: layout.collectionWidth, child: collection),
-        _WorkbenchDivider(
-          key: const ValueKey<String>('home-workbench-left-divider'),
-          onDragStart: () => _handleLeftDragStart(layout),
-          onDragUpdate: (details) => _handleLeftDragUpdate(details, layout),
-          onDragEnd: _handleLeftDragEnd,
-          collapseSide: null,
-          collapseProgress: 0,
+        collection,
+        const SizedBox(height: 8),
+        Expanded(
+          child: Row(
+            children: [
+              SizedBox(width: layout.detailsWidth, child: details),
+              if (isThreePane) ...[
+                _WorkbenchDivider(
+                  key: const ValueKey<String>('home-workbench-right-divider'),
+                  onDragStart: () => _handleRightDragStart(layout),
+                  onDragUpdate: (details) =>
+                      _handleRightDragUpdate(details, layout),
+                  onDragEnd: _handleRightDragEnd,
+                  collapseSide: _pendingCollapseSide,
+                  collapseProgress: _pendingCollapseProgress,
+                ),
+                SizedBox(
+                  width: layout.logWidth,
+                  child: _buildPaneFrame(
+                    child: widget.sidebarBuilder(_handleRightSidebarCollapse),
+                    highlighted:
+                        _pendingCollapseSide == HomeWorkbenchCollapseSide.logs,
+                    progress: _pendingCollapseProgress,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
-        SizedBox(width: layout.detailsWidth, child: details),
-        if (isThreePane) ...[
-          _WorkbenchDivider(
-            key: const ValueKey<String>('home-workbench-right-divider'),
-            onDragStart: () => _handleRightDragStart(layout),
-            onDragUpdate: (details) => _handleRightDragUpdate(details, layout),
-            onDragEnd: _handleRightDragEnd,
-            collapseSide: _pendingCollapseSide,
-            collapseProgress: _pendingCollapseProgress,
-          ),
-          SizedBox(
-            width: layout.logWidth,
-            child: _buildPaneFrame(
-              child: widget.sidebarBuilder(_handleRightSidebarCollapse),
-              highlighted:
-                  _pendingCollapseSide == HomeWorkbenchCollapseSide.logs,
-              progress: _pendingCollapseProgress,
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -181,8 +172,7 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
     required double persistedSplitRatio,
     required HomeWorkbenchLayout unrestrictedLayout,
   }) {
-    final currentCollectionWidth =
-        _dragCollectionWidth ?? persistedCollectionWidth;
+    final currentCollectionWidth = persistedCollectionWidth;
     final currentSplitRatio = _dragSplitRatio ?? persistedSplitRatio;
     _lastResolvedWidth = maxWidth;
     _lastResolvedCollectionWidth = currentCollectionWidth;
@@ -199,7 +189,6 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
   void _scheduleThreePaneRestoreIfNeeded(
       HomeWorkbenchLayoutMode unrestrictedMode) {
     if (!_forceTwoPane ||
-        _isDraggingLeftDivider ||
         !_hasRestoreTriggerChanged() ||
         unrestrictedMode != HomeWorkbenchLayoutMode.threePane) {
       return;
@@ -207,7 +196,6 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           !_forceTwoPane ||
-          _isDraggingLeftDivider ||
           !_hasRestoreTriggerChanged()) {
         return;
       }
@@ -236,45 +224,6 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
     final collectionChanged =
         (lastResolvedCollectionWidth - forcedCollectionWidth).abs() > 0.5;
     return widthChanged || collectionChanged;
-  }
-
-  /// Starts tracking left-divider movement from the current desktop width.
-  void _handleLeftDragStart(HomeWorkbenchLayout layout) {
-    _isDraggingLeftDivider = true;
-    _dragCollectionWidth = layout.collectionWidth;
-    _dragTargetCollectionWidth = layout.collectionWidth;
-  }
-
-  /// Updates the live collection width while keeping at least a two-pane desktop.
-  void _handleLeftDragUpdate(
-      DragUpdateDetails details, HomeWorkbenchLayout layout) {
-    final currentTargetWidth =
-        _dragTargetCollectionWidth ?? layout.collectionWidth;
-    final nextTargetWidth = currentTargetWidth + details.delta.dx;
-    final nextCollectionWidth = clampHomeWorkbenchCollectionWidth(
-      layout: layout,
-      targetCollectionWidth: nextTargetWidth,
-    );
-    setState(() {
-      _dragTargetCollectionWidth = nextTargetWidth;
-      _dragCollectionWidth = nextCollectionWidth;
-    });
-  }
-
-  /// Persists the last valid collection width after dragging the left divider.
-  void _handleLeftDragEnd(DragEndDetails details) {
-    if (!mounted) {
-      return;
-    }
-    final dragCollectionWidth = _dragCollectionWidth;
-    if (dragCollectionWidth != null) {
-      widget.controller.setWorkbenchCollectionWidth(dragCollectionWidth);
-    }
-    setState(() {
-      _isDraggingLeftDivider = false;
-      _dragCollectionWidth = null;
-      _dragTargetCollectionWidth = null;
-    });
   }
 
   /// Starts tracking right-divider movement from the current three-pane width.

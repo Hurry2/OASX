@@ -48,29 +48,23 @@ class WorkbenchSidebarPanel extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: tabs
-                          .map(
-                            (tab) => ChoiceChip(
-                              label: Text(_tabLabel(tab)),
-                              showCheckmark: false,
-                              selected: currentTab == tab,
-                              onSelected: (_) => controller
-                                  .setActiveWorkbenchSidebarTabValue(tab),
-                            ),
-                          )
-                          .toList(),
+                    // --- 细线 Tab 行替换 ChoiceChip ---
+                    child: _SidebarTabBar(
+                      tabs: tabs,
+                      currentTab: currentTab,
+                      labelOf: _tabLabel,
+                      onTap: controller.setActiveWorkbenchSidebarTabValue,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
                   IconButton(
                     key: const ValueKey<String>(
                       'home-workbench-collapse-right-sidebar',
                     ),
                     tooltip: I18n.homeCollapseSidebar.tr,
                     onPressed: onCollapse,
+                    iconSize: 20,
+                    visualDensity: VisualDensity.compact,
                     icon: const Icon(
                       Icons.keyboard_double_arrow_right_rounded,
                     ),
@@ -109,6 +103,59 @@ class WorkbenchSidebarPanel extends StatelessWidget {
       HomeWorkbenchTab.clickStats => I18n.homeClickStatsTab.tr,
       _ => '',
     };
+  }
+}
+
+/// 右侧面板轻量细线 Tab 行。
+class _SidebarTabBar extends StatelessWidget {
+  const _SidebarTabBar({
+    required this.tabs,
+    required this.currentTab,
+    required this.labelOf,
+    required this.onTap,
+  });
+
+  final List<HomeWorkbenchTab> tabs;
+  final HomeWorkbenchTab currentTab;
+  final String Function(HomeWorkbenchTab) labelOf;
+  final void Function(HomeWorkbenchTab) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final labelMedium = Theme.of(context).textTheme.labelMedium;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: tabs.map((tab) {
+          final isSelected = tab == currentTab;
+          return InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => onTap(tab),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: isSelected ? scheme.primary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Text(
+                labelOf(tab),
+                style: labelMedium?.copyWith(
+                  color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }
 

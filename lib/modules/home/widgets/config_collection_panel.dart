@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:oasx/modules/common/models/config_drag_payload.dart';
@@ -22,6 +23,7 @@ class ConfigCollectionPanel extends StatefulWidget {
     super.key,
     required this.controller,
     required this.fillHeight,
+    this.horizontal = false,
     required this.loadingAddScript,
     required this.refreshingScripts,
     required this.onAddScriptTap,
@@ -35,6 +37,7 @@ class ConfigCollectionPanel extends StatefulWidget {
 
   final HomeDashboardController controller;
   final bool fillHeight;
+  final bool horizontal;
   final bool loadingAddScript;
   final bool refreshingScripts;
   final VoidCallback onAddScriptTap;
@@ -103,28 +106,63 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
           }
           // 只有一条可见配置时排序没有意义，直接不显示手柄。
           final canReorder = scripts.length > 1;
+          final reorderableList = ReorderableListView.builder(
+            scrollController: _listScrollController,
+            scrollDirection:
+                widget.horizontal ? Axis.horizontal : Axis.vertical,
+            // 默认手柄会浮在行右侧压住「更多」按钮，改用自己的。
+            buildDefaultDragHandles: false,
+            itemCount: scripts.length,
+            onReorder: widget.controller.reorderScripts,
+            itemBuilder: (context, index) => _buildReorderableTile(
+              context,
+              script: scripts[index],
+              index: index,
+              isLast: index == scripts.length - 1,
+              canReorder: canReorder,
+            ),
+          );
           final listView = DragTarget<ConfigDragPayload>(
             onWillAcceptWithDetails: (_) => true,
             onMove: (details) => _handleDragMove(details.offset),
             onLeave: (_) => _stopAutoScroll(),
             builder: (context, _, __) => SizedBox.expand(
               key: _listViewportKey,
-              child: ReorderableListView.builder(
-                scrollController: _listScrollController,
-                // 默认手柄会浮在行右侧压住「更多」按钮，改用自己的。
-                buildDefaultDragHandles: false,
-                itemCount: scripts.length,
-                onReorder: widget.controller.reorderScripts,
-                itemBuilder: (context, index) => _buildReorderableTile(
-                  context,
-                  script: scripts[index],
-                  index: index,
-                  isLast: index == scripts.length - 1,
-                  canReorder: canReorder,
-                ),
-              ),
+              child: widget.horizontal
+                  ? Listener(
+                      onPointerSignal: _handleHorizontalPointerScroll,
+                      child: Scrollbar(
+                        controller: _listScrollController,
+                        thickness: 4,
+                        radius: const Radius.circular(999),
+                        child: reorderableList,
+                      ),
+                    )
+                  : reorderableList,
             ),
           );
+          if (widget.horizontal) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHorizontalToolbar(context),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 66,
+                  child: hasConfigs
+                      ? listView
+                      : Center(
+                          child: Text(
+                            I18n.homeEmptyScriptHint.tr,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                ),
+              ],
+            );
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -162,6 +200,17 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
     required bool isLast,
     required bool canReorder,
   }) {
+    if (widget.horizontal) {
+      return Padding(
+        key: ValueKey<String>('config-row-${script.name}'),
+        padding: EdgeInsets.only(right: isLast ? 0 : 8),
+        child: _buildDropTargetTile(
+          context,
+          script,
+          dragHandle: canReorder ? _buildDragHandle(context, index) : null,
+        ),
+      );
+    }
     return Column(
       key: ValueKey<String>('config-row-${script.name}'),
       mainAxisSize: MainAxisSize.min,
@@ -251,6 +300,7 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
           child: ConfigCollectionTile(
             controller: widget.controller,
             script: script,
+            horizontal: widget.horizontal,
             dragHandle: dragHandle,
             onTap: () => widget.onActivateScript(script.name),
             onTogglePower: () => widget.onTogglePower(
@@ -273,6 +323,25 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
         !widget.controller.isDragCopyPendingFor(destinationConfig);
   }
 
+  /// Converts vertical mouse wheel events into horizontal scroll on desktop.
+  void _handleHorizontalPointerScroll(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_listScrollController.hasClients) {
+      return;
+    }
+    final delta = event.scrollDelta.dy != 0
+        ? event.scrollDelta.dy
+        : event.scrollDelta.dx;
+    if (delta == 0) {
+      return;
+    }
+    final position = _listScrollController.position;
+    final target = (position.pixels + delta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    _listScrollController.jumpTo(target);
+  }
+
   /// Starts or stops list auto-scroll based on the current drag location.
   void _handleDragMove(Offset globalOffset) {
     final renderObject = _listViewportKey.currentContext?.findRenderObject();
@@ -281,12 +350,14 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
       return;
     }
     final localOffset = renderObject.globalToLocal(globalOffset);
-    final viewportHeight = renderObject.size.height;
-    if (localOffset.dy <= _autoScrollEdgeExtent) {
+    final axisOffset = widget.horizontal ? localOffset.dx : localOffset.dy;
+    final viewportExtent =
+        widget.horizontal ? renderObject.size.width : renderObject.size.height;
+    if (axisOffset <= _autoScrollEdgeExtent) {
       _startAutoScroll(-1);
       return;
     }
-    if (localOffset.dy >= viewportHeight - _autoScrollEdgeExtent) {
+    if (axisOffset >= viewportExtent - _autoScrollEdgeExtent) {
       _startAutoScroll(1);
       return;
     }
@@ -328,6 +399,53 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
     _autoScrollTimer?.cancel();
     _autoScrollTimer = null;
     _autoScrollDirection = 0;
+  }
+
+  /// Builds the single-row compact toolbar for the horizontal top config bar.
+  Widget _buildHorizontalToolbar(BuildContext context) {
+    final style = Theme.of(context).textTheme.titleMedium;
+    final separatorStyle = style?.copyWith(
+      color: Theme.of(context).colorScheme.outline,
+      fontWeight: FontWeight.w600,
+    );
+    final filter = widget.controller.stateFilter.value;
+    final isFiltered = filter != HomeScriptStateFilter.all;
+    return Row(
+      children: [
+        _HeaderTitle(
+          controller: widget.controller,
+          style: style,
+          separatorStyle: separatorStyle,
+          centered: false,
+        ),
+        const SizedBox(width: 12),
+        const Spacer(),
+        SizedBox(
+          width: 210,
+          child: _SearchField(
+            controller: _searchController,
+            onChanged: widget.controller.setSearchQuery,
+            compact: true,
+          ),
+        ),
+        const SizedBox(width: 4),
+        _FilterButton(
+          filter: filter,
+          isFiltered: isFiltered,
+          onSelected: widget.controller.setStateFilterValue,
+          stateLabel: _stateLabel,
+        ),
+        const SizedBox(width: 4),
+        _HeaderActions(
+          controller: widget.controller,
+          refreshingScripts: widget.refreshingScripts,
+          loadingAddScript: widget.loadingAddScript,
+          onRefreshScriptsTap: widget.onRefreshScriptsTap,
+          onAddScriptTap: widget.onAddScriptTap,
+          centered: false,
+        ),
+      ],
+    );
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -604,20 +722,46 @@ class _HeaderActions extends StatelessWidget {
 }
 
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.controller, required this.onChanged});
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+    this.compact = false,
+  });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return TextFormField(
       controller: controller,
+      style: compact ? Theme.of(context).textTheme.bodySmall : null,
       decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.search_rounded),
+        prefixIcon: Icon(Icons.search_rounded, size: compact ? 16 : 20),
+        prefixIconConstraints: compact
+            ? const BoxConstraints(minWidth: 32, minHeight: 32)
+            : null,
         hintText: I18n.homeScriptSearchHint.tr,
-        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: scheme.surfaceContainerLowest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: scheme.primary, width: 1.5),
+        ),
         isDense: true,
+        contentPadding: compact
+            ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       onChanged: onChanged,
     );

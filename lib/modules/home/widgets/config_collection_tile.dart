@@ -6,7 +6,7 @@ import 'package:oasx/modules/home/widgets/config_collection_script_label.dart';
 import 'package:oasx/modules/home/widgets/config_collection_task_preview.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
-class ConfigCollectionTile extends StatelessWidget {
+class ConfigCollectionTile extends StatefulWidget {
   const ConfigCollectionTile({
     super.key,
     required this.controller,
@@ -16,6 +16,7 @@ class ConfigCollectionTile extends StatelessWidget {
     required this.onRename,
     required this.onExport,
     required this.onDelete,
+    this.horizontal = false,
     this.dragHandle,
   });
 
@@ -28,6 +29,7 @@ class ConfigCollectionTile extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onExport;
   final VoidCallback onDelete;
+  final bool horizontal;
 
   /// 拖动排序手柄，由列表注入。
   ///
@@ -35,89 +37,145 @@ class ConfigCollectionTile extends StatelessWidget {
   final Widget? dragHandle;
 
   @override
+  State<ConfigCollectionTile> createState() => _ConfigCollectionTileState();
+}
+
+class _ConfigCollectionTileState extends State<ConfigCollectionTile> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         return Obx(() {
-          final isActive = controller.activeScriptName.value == script.name;
-          final showLinkCheckbox = controller.isLinkModeEnabled.value;
-          final isLinked = controller.isScriptLinked(script.name);
-          final isDragCopyLoading = controller.isDragCopyPendingFor(
-            script.name,
+          final isActive =
+              widget.controller.activeScriptName.value == widget.script.name;
+          final showLinkCheckbox = widget.controller.isLinkModeEnabled.value;
+          final isLinked = widget.controller.isScriptLinked(widget.script.name);
+          final isDragCopyLoading = widget.controller.isDragCopyPendingFor(
+            widget.script.name,
           );
           // 排序手柄会占掉左侧一条，窄窗下要提前切到紧凑布局。
           final compactThreshold =
               ConfigCollectionTile._compactLayoutThreshold +
               (showLinkCheckbox ? 64 : 0) +
-              (dragHandle != null ? 28 : 0);
+              (widget.dragHandle != null ? 28 : 0);
           final isCompact = constraints.maxWidth < compactThreshold;
           final rowColor = isActive
-              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.24)
-              : theme.cardColor;
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+              : (widget.horizontal
+                    ? theme.colorScheme.surfaceContainerLowest
+                    : theme.cardColor);
           final accentColor = _accentColor(
             context,
-            controller.scriptCollectionStateFor(script),
+            widget.controller.scriptCollectionStateFor(widget.script),
           );
-          return Material(
-            color: rowColor,
-            child: InkWell(
-              onTap: isDragCopyLoading ? null : onTap,
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: isCompact ? 8 : 10,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    if (showLinkCheckbox) ...[
-                      SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: Checkbox(
-                          value: isLinked,
-                          onChanged: (value) => controller.setScriptLinked(
-                            script.name,
-                            value ?? false,
+          // 悬浮时才显示操作按钮，空闲时用占位宽度保持布局稳定
+          final showActions = _isHovered || isActive;
+          final tileContent = MouseRegion(
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              decoration: BoxDecoration(
+                color: rowColor,
+                borderRadius: widget.horizontal
+                    ? BorderRadius.circular(10)
+                    : null,
+                border: widget.horizontal
+                    ? Border.all(
+                        color: isActive
+                            ? theme.colorScheme.primary.withValues(alpha: 0.45)
+                            : theme.colorScheme.outlineVariant.withValues(
+                                alpha: 0.45,
+                              ),
+                      )
+                    : null,
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.12,
                           ),
-                          visualDensity: VisualDensity.compact,
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: InkWell(
+                borderRadius: widget.horizontal
+                    ? BorderRadius.circular(10)
+                    : null,
+                onTap: isDragCopyLoading ? null : widget.onTap,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.horizontal ? 8 : 10,
+                    vertical: widget.horizontal ? 6 : (isCompact ? 8 : 10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (showLinkCheckbox) ...[
+                        SizedBox(
+                          width: widget.horizontal ? 28 : 36,
+                          height: widget.horizontal ? 28 : 36,
+                          child: Checkbox(
+                            value: isLinked,
+                            onChanged: (value) =>
+                                widget.controller.setScriptLinked(
+                              widget.script.name,
+                              value ?? false,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                      ],
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            AbsorbPointer(
+                              absorbing: isDragCopyLoading,
+                              child: _ScriptMeta(
+                                script: widget.script,
+                                compact: !widget.horizontal && isCompact,
+                                horizontal: widget.horizontal,
+                                accentColor: accentColor,
+                                dragHandle: widget.dragHandle,
+                                showActions: showActions,
+                                powerButton: _PowerButton(
+                                  onTogglePower: widget.onTogglePower,
+                                ),
+                                popupButton: _ActionMenuButton(
+                                  onRename: widget.onRename,
+                                  onExport: widget.onExport,
+                                  onDelete: widget.onDelete,
+                                ),
+                              ),
+                            ),
+                            if (isDragCopyLoading)
+                              const Positioned.fill(
+                                child: _DragCopyLoadingMask(),
+                              ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 2),
                     ],
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          AbsorbPointer(
-                            absorbing: isDragCopyLoading,
-                            child: _ScriptMeta(
-                              script: script,
-                              compact: isCompact,
-                              accentColor: accentColor,
-                              dragHandle: dragHandle,
-                              powerButton: _PowerButton(
-                                onTogglePower: onTogglePower,
-                              ),
-                              popupButton: _ActionMenuButton(
-                                onRename: onRename,
-                                onExport: onExport,
-                                onDelete: onDelete,
-                              ),
-                            ),
-                          ),
-                          if (isDragCopyLoading)
-                            const Positioned.fill(
-                              child: _DragCopyLoadingMask(),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           );
+          if (widget.horizontal) {
+            return SizedBox(
+              width: showLinkCheckbox ? 248 : 216,
+              height: 62,
+              child: tileContent,
+            );
+          }
+          return tileContent;
         });
       },
     );
@@ -139,21 +197,33 @@ class _ScriptMeta extends StatelessWidget {
   const _ScriptMeta({
     required this.script,
     required this.compact,
+    required this.horizontal,
     required this.accentColor,
     required this.dragHandle,
+    required this.showActions,
     required this.powerButton,
     required this.popupButton,
   });
 
   final ScriptModel script;
   final bool compact;
+  final bool horizontal;
   final Color accentColor;
   final Widget? dragHandle;
+  final bool showActions;
   final Widget powerButton;
   final Widget popupButton;
 
   @override
   Widget build(BuildContext context) {
+    final actions = AnimatedOpacity(
+      duration: const Duration(milliseconds: 150),
+      opacity: showActions ? 1.0 : 0.0,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [powerButton, popupButton],
+      ),
+    );
     if (compact) {
       return IntrinsicHeight(
         child: Row(
@@ -170,13 +240,7 @@ class _ScriptMeta extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 4,
-                    runSpacing: 2,
-                    children: [powerButton, popupButton],
-                  ),
+                  actions,
                   const SizedBox(height: 4),
                   ConfigCollectionScriptLabel(script: script, centered: true),
                 ],
@@ -195,21 +259,20 @@ class _ScriptMeta extends StatelessWidget {
             key: ValueKey<String>('config-accent-bar-${script.name}'),
             color: accentColor,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: horizontal ? 8 : 10),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ConfigCollectionScriptLabel(script: script, centered: false),
-                const SizedBox(height: 6),
+                SizedBox(height: horizontal ? 2 : 6),
                 ConfigCollectionTaskPreview(script: script),
               ],
             ),
           ),
-          const SizedBox(width: ConfigCollectionTile._actionSpacing),
-          powerButton,
-          popupButton,
+          SizedBox(width: horizontal ? 2 : ConfigCollectionTile._actionSpacing),
+          actions,
         ],
       ),
     );

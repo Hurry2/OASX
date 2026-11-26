@@ -126,22 +126,15 @@ class ActiveConfigPanel extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: tabs
-                    .map(
-                      (tab) => ChoiceChip(
-                        label: Text(_tabLabel(tab)),
-                        showCheckmark: false,
-                        selected: currentTab == tab,
-                        onSelected: (_) => onChangeTab(tab),
-                      ),
-                    )
-                    .toList(),
+              const SizedBox(height: 4),
+              // --- 细线 Tab 行替换 ChoiceChip ---
+              _SlimTabBar(
+                tabs: tabs,
+                currentTab: currentTab,
+                labelOf: _tabLabel,
+                onTap: onChangeTab,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Expanded(child: _buildTabContent(script, currentTab)),
             ],
           );
@@ -222,6 +215,60 @@ class _BulkQuickScheduleButton extends StatelessWidget {
               ),
             )
           : Icon(icon),
+    );
+  }
+}
+
+/// 轻量细线 Tab 行，不依赖 TickerProvider。
+/// 通过 ScrollController 支持横向滚动（tab 过多时）。
+class _SlimTabBar<T> extends StatelessWidget {
+  const _SlimTabBar({
+    required this.tabs,
+    required this.currentTab,
+    required this.labelOf,
+    required this.onTap,
+  });
+
+  final List<T> tabs;
+  final T currentTab;
+  final String Function(T) labelOf;
+  final void Function(T) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final labelMedium = Theme.of(context).textTheme.labelMedium;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: tabs.map((tab) {
+          final isSelected = tab == currentTab;
+          return InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => onTap(tab),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: isSelected ? scheme.primary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Text(
+                labelOf(tab),
+                style: labelMedium?.copyWith(
+                  color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

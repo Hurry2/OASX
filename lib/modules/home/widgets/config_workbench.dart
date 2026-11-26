@@ -35,7 +35,8 @@ class ConfigWorkbench extends StatelessWidget {
       controller: controller,
       collectionBuilder: (layoutMode) => ConfigCollectionPanel(
         controller: controller,
-        fillHeight: true,
+        fillHeight: layoutMode == HomeWorkbenchLayoutMode.singlePane,
+        horizontal: layoutMode != HomeWorkbenchLayoutMode.singlePane,
         loadingAddScript: loadingAddScript,
         refreshingScripts: refreshingScripts,
         onAddScriptTap: onAddScriptTap,

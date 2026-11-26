@@ -70,8 +70,6 @@ HomeWorkbenchLayout resolveHomeWorkbenchLayout({
   bool forceTwoPane = false,
 }) {
   final width = maxWidth.isFinite ? maxWidth : 0.0;
-  final normalizedCollectionWidth =
-      sanitizeHomeWorkbenchCollectionWidth(collectionWidth);
   final normalizedSplitRatio = sanitizeHomeWorkbenchSplitRatio(splitRatio);
   const twoPaneThreshold = kHomeWorkbenchMinCollectionWidth +
       kHomeWorkbenchDividerWidth +
@@ -80,13 +78,9 @@ HomeWorkbenchLayout resolveHomeWorkbenchLayout({
     return const HomeWorkbenchLayout.singlePane();
   }
 
-  final maxCollectionWidth =
-      width - kHomeWorkbenchDividerWidth - kHomeWorkbenchMinDetailsWidth;
-  final appliedCollectionWidth = normalizedCollectionWidth
-      .clamp(kHomeWorkbenchMinCollectionWidth, maxCollectionWidth)
-      .toDouble();
-  final mergedWorkspaceWidth =
-      width - appliedCollectionWidth - kHomeWorkbenchDividerWidth;
+  final maxCollectionWidth = width;
+  final appliedCollectionWidth = width;
+  final mergedWorkspaceWidth = width;
   final canShowThreePane = !forceTwoPane &&
       mergedWorkspaceWidth >=
           kHomeWorkbenchMinDetailsWidth +
