@@ -37,17 +37,7 @@ class HomeTitleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 5),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset('assets/images/Icon-app.png', height: 30, width: 30),
-          const SizedBox(width: 14),
-          Flexible(child: _TitleLabel(text: 'OASX / ${I18n.home.tr}')),
-        ],
-      ),
-    );
+    return _BrandTitle(subtitle: I18n.home.tr);
   }
 }
 
@@ -61,20 +51,9 @@ class SettingTitle extends StatelessWidget {
       TargetPlatform.iOS => false,
       _ => true,
     };
-    return Padding(
-      padding: const EdgeInsets.only(left: 5),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (backButton) ...[
-            BackButton(onPressed: _backHomeOrPop),
-            const SizedBox(width: 8),
-          ],
-          Image.asset('assets/images/Icon-app.png', height: 30, width: 30),
-          const SizedBox(width: 14),
-          Flexible(child: _TitleLabel(text: 'OASX / ${I18n.setting.tr}')),
-        ],
-      ),
+    return _BrandTitle(
+      subtitle: I18n.setting.tr,
+      leading: backButton ? BackButton(onPressed: _backHomeOrPop) : null,
     );
   }
 
@@ -98,26 +77,18 @@ class ServerTitle extends StatelessWidget {
       TargetPlatform.iOS => false,
       _ => true,
     };
-    return Padding(
-      padding: const EdgeInsets.only(left: 5),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Obx(() {
-            if (backButton &&
-                !Get.find<ServerController>().isDeployLoading.value) {
-              return const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [BackButton(), SizedBox(width: 8)],
-              );
-            }
-            return const SizedBox.shrink();
-          }),
-          Image.asset('assets/images/Icon-app.png', height: 30, width: 30),
-          const SizedBox(width: 14),
-          const Flexible(child: _TitleLabel(text: 'OASX / Server')),
-        ],
-      ),
+    return _BrandTitle(
+      subtitle: 'Server',
+      leading: Obx(() {
+        if (backButton &&
+            !Get.find<ServerController>().isDeployLoading.value) {
+          return const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [BackButton(), SizedBox(width: 6)],
+          );
+        }
+        return const SizedBox.shrink();
+      }),
     );
   }
 }
@@ -132,21 +103,9 @@ class ClickStatisticsTitle extends StatelessWidget {
       TargetPlatform.iOS => false,
       _ => true,
     };
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 5),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (backButton) ...[
-            BackButton(onPressed: _backHome),
-            const SizedBox(width: 8),
-          ],
-          Image.asset('assets/images/Icon-app.png', height: 30, width: 30),
-          const SizedBox(width: 14),
-          const Flexible(child: _TitleLabel(text: 'OASX / 热力图')),
-        ],
-      ),
+    return _BrandTitle(
+      subtitle: '热力图',
+      leading: backButton ? BackButton(onPressed: _backHome) : null,
     );
   }
 
@@ -159,19 +118,63 @@ class ClickStatisticsTitle extends StatelessWidget {
   }
 }
 
-class _TitleLabel extends StatelessWidget {
-  const _TitleLabel({required this.text});
+class _BrandTitle extends StatelessWidget {
+  const _BrandTitle({required this.subtitle, this.leading});
 
-  final String text;
+  final String subtitle;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      softWrap: false,
-      style: Theme.of(context).textTheme.titleMedium,
+    final scheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.titleSmall;
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 4)],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.asset(
+              'assets/images/Icon-app.png',
+              height: 22,
+              width: 22,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'OASX',
+            style: baseStyle?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+              '·',
+              style: baseStyle?.copyWith(
+                color: scheme.outline,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Flexible(
+            child: Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: baseStyle?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

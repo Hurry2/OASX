@@ -23,7 +23,7 @@ class WindowsCaptionBar extends StatefulWidget implements PreferredSizeWidget {
   final List<Widget> trailingActions;
 
   @override
-  Size get preferredSize => const Size.fromHeight(50);
+  Size get preferredSize => const Size.fromHeight(40);
 
   @override
   State<WindowsCaptionBar> createState() => _WindowsCaptionBarState();
@@ -83,7 +83,7 @@ class _WindowsCaptionBarState extends State<WindowsCaptionBar>
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(left: 16),
+              padding: const EdgeInsets.only(left: 12),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final hideTrailingActions = _shouldHideTrailingActions(

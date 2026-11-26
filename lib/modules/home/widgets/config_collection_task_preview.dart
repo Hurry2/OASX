@@ -26,6 +26,7 @@ class ConfigCollectionTaskPreview extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium,
         );
       }
+      final timeText = preview.formattedTime;
       return Row(
         children: [
           Icon(
@@ -36,13 +37,25 @@ class ConfigCollectionTaskPreview extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: Text(
-              preview.displayName,
+              preview.localizedName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
               style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
+          if (timeText.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Text(
+              timeText,
+              maxLines: 1,
+              softWrap: false,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
         ],
       );
     });
@@ -99,12 +112,13 @@ class _TaskPreviewData {
   final String name;
   final String timeText;
 
-  String get displayName {
-    final localizedName = name.tr;
+  String get localizedName => name.tr;
+
+  String get formattedTime {
     if (timeText.isEmpty || type != _PreviewTaskType.waiting) {
-      return localizedName;
+      return '';
     }
-    return '$localizedName ${_timeOfDayText(timeText)}';
+    return _timeOfDayText(timeText);
   }
 
   String _timeOfDayText(String value) {

@@ -239,18 +239,19 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
   /// box hit-tests (`ColoredBox` is opaque for hit testing), instead of only the
   /// few pixels the glyph actually covers.
   Widget _buildDragHandle(BuildContext context, int index) {
+    final handleWidth = widget.horizontal ? 18.0 : _dragHandleWidth;
     return ReorderableDragStartListener(
       index: index,
       child: MouseRegion(
         cursor: SystemMouseCursors.grab,
         child: Container(
-          width: _dragHandleWidth,
+          width: handleWidth,
           height: 34,
           alignment: Alignment.center,
           color: Colors.transparent,
           child: Icon(
             Icons.drag_indicator_rounded,
-            size: 18,
+            size: widget.horizontal ? 16 : 18,
             color: Theme.of(context).colorScheme.outline,
           ),
         ),

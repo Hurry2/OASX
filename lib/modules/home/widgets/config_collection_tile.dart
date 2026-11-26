@@ -71,8 +71,70 @@ class _ConfigCollectionTileState extends State<ConfigCollectionTile> {
             context,
             widget.controller.scriptCollectionStateFor(widget.script),
           );
-          // 悬浮时才显示操作按钮，空闲时用占位宽度保持布局稳定
-          final showActions = _isHovered || isActive;
+          // 悬浮时才显示操作按钮；横向模式下改为右上角悬浮胶囊，不挤占文字宽度
+          final showActions = widget.horizontal
+              ? _isHovered
+              : (_isHovered || isActive);
+          final powerButton = _PowerButton(
+            onTogglePower: widget.onTogglePower,
+            compact: widget.horizontal,
+          );
+          final popupButton = _ActionMenuButton(
+            onRename: widget.onRename,
+            onExport: widget.onExport,
+            onDelete: widget.onDelete,
+            compact: widget.horizontal,
+          );
+          final bodyRow = Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.horizontal ? 8 : 10,
+              vertical: widget.horizontal ? 6 : (isCompact ? 8 : 10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (showLinkCheckbox) ...[
+                  SizedBox(
+                    width: widget.horizontal ? 28 : 36,
+                    height: widget.horizontal ? 28 : 36,
+                    child: Checkbox(
+                      value: isLinked,
+                      onChanged: (value) =>
+                          widget.controller.setScriptLinked(
+                        widget.script.name,
+                        value ?? false,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                ],
+                Expanded(
+                  child: Stack(
+                    children: [
+                      AbsorbPointer(
+                        absorbing: isDragCopyLoading,
+                        child: _ScriptMeta(
+                          script: widget.script,
+                          compact: !widget.horizontal && isCompact,
+                          horizontal: widget.horizontal,
+                          accentColor: accentColor,
+                          dragHandle: widget.dragHandle,
+                          showActions: showActions,
+                          powerButton: powerButton,
+                          popupButton: popupButton,
+                        ),
+                      ),
+                      if (isDragCopyLoading)
+                        const Positioned.fill(
+                          child: _DragCopyLoadingMask(),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
           final tileContent = MouseRegion(
             onEnter: (_) => setState(() => _isHovered = true),
             onExit: (_) => setState(() => _isHovered = false),
@@ -109,70 +171,68 @@ class _ConfigCollectionTileState extends State<ConfigCollectionTile> {
                     ? BorderRadius.circular(10)
                     : null,
                 onTap: isDragCopyLoading ? null : widget.onTap,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: widget.horizontal ? 8 : 10,
-                    vertical: widget.horizontal ? 6 : (isCompact ? 8 : 10),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (showLinkCheckbox) ...[
-                        SizedBox(
-                          width: widget.horizontal ? 28 : 36,
-                          height: widget.horizontal ? 28 : 36,
-                          child: Checkbox(
-                            value: isLinked,
-                            onChanged: (value) =>
-                                widget.controller.setScriptLinked(
-                              widget.script.name,
-                              value ?? false,
+                child: widget.horizontal
+                    ? Stack(
+                        children: [
+                          bodyRow,
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: IgnorePointer(
+                              ignoring: !showActions || isDragCopyLoading,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 140),
+                                opacity: showActions && !isDragCopyLoading
+                                    ? 1.0
+                                    : 0.0,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceContainerHighest
+                                        .withValues(alpha: 0.94),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outlineVariant
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: theme.colorScheme.shadow
+                                            .withValues(alpha: 0.10),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                      vertical: 1,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [powerButton, popupButton],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                            visualDensity: VisualDensity.compact,
                           ),
-                        ),
-                        const SizedBox(width: 2),
-                      ],
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            AbsorbPointer(
-                              absorbing: isDragCopyLoading,
-                              child: _ScriptMeta(
-                                script: widget.script,
-                                compact: !widget.horizontal && isCompact,
-                                horizontal: widget.horizontal,
-                                accentColor: accentColor,
-                                dragHandle: widget.dragHandle,
-                                showActions: showActions,
-                                powerButton: _PowerButton(
-                                  onTogglePower: widget.onTogglePower,
-                                ),
-                                popupButton: _ActionMenuButton(
-                                  onRename: widget.onRename,
-                                  onExport: widget.onExport,
-                                  onDelete: widget.onDelete,
-                                ),
-                              ),
-                            ),
-                            if (isDragCopyLoading)
-                              const Positioned.fill(
-                                child: _DragCopyLoadingMask(),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                        ],
+                      )
+                    : bodyRow,
               ),
             ),
           );
           if (widget.horizontal) {
-            return SizedBox(
-              width: showLinkCheckbox ? 248 : 216,
-              height: 62,
-              child: tileContent,
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: showLinkCheckbox ? 236 : 210,
+                maxWidth: showLinkCheckbox ? 304 : 276,
+              ),
+              child: SizedBox(
+                height: 62,
+                child: IntrinsicWidth(child: tileContent),
+              ),
             );
           }
           return tileContent;
@@ -265,14 +325,23 @@ class _ScriptMeta extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ConfigCollectionScriptLabel(script: script, centered: false),
-                SizedBox(height: horizontal ? 2 : 6),
+                Tooltip(
+                  message: script.name,
+                  waitDuration: const Duration(milliseconds: 500),
+                  child: ConfigCollectionScriptLabel(
+                    script: script,
+                    centered: false,
+                  ),
+                ),
+                SizedBox(height: horizontal ? 3 : 6),
                 ConfigCollectionTaskPreview(script: script),
               ],
             ),
           ),
-          SizedBox(width: horizontal ? 2 : ConfigCollectionTile._actionSpacing),
-          actions,
+          if (!horizontal) ...[
+            const SizedBox(width: ConfigCollectionTile._actionSpacing),
+            actions,
+          ],
         ],
       ),
     );
@@ -329,18 +398,20 @@ class _RegularAccentBar extends StatelessWidget {
 }
 
 class _PowerButton extends StatelessWidget {
-  const _PowerButton({required this.onTogglePower});
+  const _PowerButton({required this.onTogglePower, this.compact = false});
 
   final VoidCallback onTogglePower;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final dimension = compact ? 26.0 : 32.0;
     return IconButton(
       onPressed: onTogglePower,
       visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      constraints: BoxConstraints.tightFor(width: dimension, height: dimension),
       padding: EdgeInsets.zero,
-      iconSize: 23,
+      iconSize: compact ? 18 : 23,
       icon: const Icon(Icons.power_settings_new_rounded),
     );
   }
@@ -351,20 +422,22 @@ class _ActionMenuButton extends StatelessWidget {
     required this.onRename,
     required this.onExport,
     required this.onDelete,
+    this.compact = false,
   });
 
   final VoidCallback onRename;
   final VoidCallback onExport;
   final VoidCallback onDelete;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox.square(
-      dimension: 32,
+      dimension: compact ? 26 : 32,
       child: PopupMenuButton<String>(
         padding: EdgeInsets.zero,
         tooltip: '',
-        icon: const Icon(Icons.more_vert_rounded, size: 18),
+        icon: Icon(Icons.more_vert_rounded, size: compact ? 16 : 18),
         onSelected: (value) async {
           if (value == 'rename') {
             onRename();
