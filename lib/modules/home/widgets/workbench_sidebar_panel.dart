@@ -163,7 +163,6 @@ class WorkbenchSidebarPanel extends StatelessWidget {
   /// bottom row spans both columns with [Live Screenshot | Statistics Pie].
   Widget _buildBentoCockpit(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     return Column(
       children: [
         Expanded(
@@ -173,70 +172,46 @@ class WorkbenchSidebarPanel extends StatelessWidget {
               const SizedBox(width: 4),
               SizedBox(
                 width: 300,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+                child: StorageStatsPanel(
+                  scriptName: scriptName,
+                  showScreenshot: false,
+                  forcedColumns: 2,
+                  headerTrailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: I18n.homeClickStatsTab.tr,
+                        onPressed: () => _openClickStatsDialog(context),
+                        iconSize: 18,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 28,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: _HeatmapMouseIcon(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 15,
-                            color: scheme.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            I18n.storageStatsTab.tr,
-                            style: textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            tooltip: I18n.homeClickStatsTab.tr,
-                            onPressed: () => _openClickStatsDialog(context),
-                            iconSize: 18,
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 28,
-                              height: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            icon: _HeatmapMouseIcon(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          IconButton(
-                            key: const ValueKey<String>(
-                              'home-workbench-collapse-right-sidebar',
-                            ),
-                            tooltip: I18n.homeCollapseSidebar.tr,
-                            onPressed: onCollapse,
-                            iconSize: 18,
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 28,
-                              height: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(
-                              Icons.keyboard_double_arrow_right_rounded,
-                            ),
-                          ),
-                        ],
+                      IconButton(
+                        key: const ValueKey<String>(
+                          'home-workbench-collapse-right-sidebar',
+                        ),
+                        tooltip: I18n.homeCollapseSidebar.tr,
+                        onPressed: onCollapse,
+                        iconSize: 18,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 28,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          Icons.keyboard_double_arrow_right_rounded,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: StorageStatsPanel(
-                        scriptName: scriptName,
-                        showScreenshot: false,
-                        forcedColumns: 2,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],

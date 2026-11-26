@@ -36,6 +36,7 @@ class StorageStatsPanel extends StatefulWidget {
     required this.scriptName,
     this.showScreenshot = true,
     this.forcedColumns,
+    this.headerTrailing,
   });
 
   /// Config name the backend keys every resource snapshot and frame by.
@@ -46,6 +47,9 @@ class StorageStatsPanel extends StatefulWidget {
 
   /// Optional fixed column count for the resource grid (e.g. 2 for sidebar).
   final int? forcedColumns;
+
+  /// Optional trailing actions placed inside the card header row.
+  final Widget? headerTrailing;
 
   @override
   State<StorageStatsPanel> createState() => _StorageStatsPanelState();
@@ -78,6 +82,8 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
   @override
   Widget build(BuildContext context) {
     final isCompact = widget.forcedColumns != null;
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Card(
       child: Padding(
         padding: EdgeInsets.all(isCompact ? 10 : _kStoragePanelPadding),
@@ -86,6 +92,27 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.headerTrailing != null) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 16,
+                      color: scheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      I18n.storageStatsTab.tr,
+                      style: textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    widget.headerTrailing!,
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
               _StorageStatsToolbar(
                 controller: controller,
                 day: day,
