@@ -44,12 +44,91 @@ class WorkbenchSidebarPanel extends StatelessWidget {
   }
 
   /// Narrow fallback when the user drags the divider to shrink the right pane:
-  /// keeps the same Bento layout without reverting to the legacy tab bar.
+  /// keeps the Bento layout and exposes Monitor + Heatmap as a floating pill.
   Widget _buildNarrowBento(BuildContext context, double maxWidth) {
     final showBottomSplit = maxWidth >= 460;
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Expanded(child: LogCenterPanel(scriptName: scriptName)),
+        Expanded(
+          child: Stack(
+            children: [
+              LogCenterPanel(scriptName: scriptName),
+              Positioned(
+                right: 14,
+                bottom: 14,
+                child: Material(
+                  elevation: 3,
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: () => _openStorageStatsDialog(context),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 15,
+                                  color: scheme.onPrimaryContainer,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  I18n.storageStatsTab.tr,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: scheme.onPrimaryContainer,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: 1,
+                          height: 14,
+                          color: scheme.onPrimaryContainer.withValues(
+                            alpha: 0.2,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: I18n.homeClickStatsTab.tr,
+                          onPressed: () => _openClickStatsDialog(context),
+                          iconSize: 16,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 28,
+                            height: 26,
+                          ),
+                          icon: _HeatmapMouseIcon(
+                            color: scheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 4),
         SizedBox(
           height: 204,
@@ -186,6 +265,51 @@ class WorkbenchSidebarPanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openStorageStatsDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1020, maxHeight: 820),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 18,
+                      color: Theme.of(dialogContext).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      I18n.storageStatsTab.tr,
+                      style: Theme.of(dialogContext).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const Divider(height: 12),
+                Expanded(
+                  child: StorageStatsPanel(
+                    scriptName: scriptName,
+                    showScreenshot: false,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
