@@ -93,7 +93,7 @@ class WorkbenchSidebarPanel extends StatelessWidget {
               Expanded(child: LogCenterPanel(scriptName: scriptName)),
               const SizedBox(width: 4),
               SizedBox(
-                width: 284,
+                width: 300,
                 child: Column(
                   children: [
                     Padding(

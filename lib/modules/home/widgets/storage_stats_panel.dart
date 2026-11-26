@@ -585,27 +585,24 @@ class _StorageResourceCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (deltaText.isNotEmpty && currentDelta != null) ...[
+                const SizedBox(width: 4),
+                StorageDeltaLabel(delta: currentDelta, text: deltaText),
+              ],
             ],
           ),
           const SizedBox(height: 4),
           SizedBox(
             width: double.infinity,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 2,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              alignment: WrapAlignment.spaceBetween,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: valueTooltip == null
-                      ? valueText
-                      : Tooltip(message: valueTooltip, child: valueText),
-                ),
-                if (deltaText.isNotEmpty && currentDelta != null)
-                  StorageDeltaLabel(delta: currentDelta, text: deltaText),
-              ],
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: valueTooltip == null
+                    ? valueText
+                    : Tooltip(message: valueTooltip, child: valueText),
+              ),
             ),
           ),
         ],
