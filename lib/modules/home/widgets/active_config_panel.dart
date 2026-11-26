@@ -54,7 +54,7 @@ class ActiveConfigPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Obx(() {
           final script = controller.activeScriptModel;
           final currentTab = controller.displayedWorkbenchTabFor(layoutMode);
@@ -77,12 +77,28 @@ class ActiveConfigPanel extends StatelessWidget {
                     IconButton(
                       tooltip: I18n.scriptList.tr,
                       onPressed: onBackToScripts,
+                      iconSize: 16,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
+                  ConfigStateIndicator(
+                    state: controller.scriptStateFor(script),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       script.name,
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   _BulkQuickScheduleButton(
@@ -101,18 +117,24 @@ class ActiveConfigPanel extends StatelessWidget {
                         ? onBulkQuickWait
                         : null,
                   ),
-                  const SizedBox(width: 8),
-                  ConfigStateIndicator(
-                    state: controller.scriptStateFor(script),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
                   IconButton(
                     tooltip: isRunning ? I18n.stop.tr : I18n.run.tr,
                     onPressed: () => onTogglePower(script.name, !isRunning),
-                    icon: const Icon(Icons.power_settings_new_rounded),
+                    iconSize: 16,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    icon: Icon(
+                      Icons.power_settings_new_rounded,
+                      color: isRunning
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                  if (onExpandRightSidebar != null) const SizedBox(width: 8),
+                  if (onExpandRightSidebar != null) const SizedBox(width: 4),
                   if (onExpandRightSidebar != null)
                     IconButton.filledTonal(
                       key: const ValueKey<String>(
@@ -120,15 +142,21 @@ class ActiveConfigPanel extends StatelessWidget {
                       ),
                       tooltip: I18n.homeRestoreSidebar.tr,
                       onPressed: onExpandRightSidebar,
+                      iconSize: 16,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
                       icon: const Icon(
                         Icons.keyboard_double_arrow_left_rounded,
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
-              // --- 细线 Tab 行替换 ChoiceChip ---
-              _SlimTabBar(
+              const SizedBox(height: 8),
+              _PillTabSwitch<HomeWorkbenchTab>(
                 tabs: tabs,
                 currentTab: currentTab,
                 labelOf: _tabLabel,
@@ -202,27 +230,31 @@ class _BulkQuickScheduleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: tooltip,
       onPressed: loading ? null : onPressed,
+      iconSize: 16,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
       icon: loading
           ? SizedBox(
-              width: 18,
-              height: 18,
+              width: 14,
+              height: 14,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Theme.of(context).colorScheme.primary,
+                color: scheme.primary,
               ),
             )
-          : Icon(icon),
+          : Icon(icon, color: scheme.onSurfaceVariant),
     );
   }
 }
 
-/// 轻量细线 Tab 行，不依赖 TickerProvider。
-/// 通过 ScrollController 支持横向滚动（tab 过多时）。
-class _SlimTabBar<T> extends StatelessWidget {
-  const _SlimTabBar({
+/// 胶囊风格 Tab 切换条，与日志/统计面板保持一致。
+class _PillTabSwitch<T> extends StatelessWidget {
+  const _PillTabSwitch({
     required this.tabs,
     required this.currentTab,
     required this.labelOf,
@@ -237,37 +269,47 @@ class _SlimTabBar<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final labelMedium = Theme.of(context).textTheme.labelMedium;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Row(
-        children: tabs.map((tab) {
-          final isSelected = tab == currentTab;
-          return InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: () => onTap(tab),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: isSelected ? scheme.primary : Colors.transparent,
-                    width: 2,
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: tabs.map((tab) {
+            final isSelected = tab == currentTab;
+            return InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => onTap(tab),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? scheme.primaryContainer
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  labelOf(tab),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: isSelected
+                        ? scheme.onPrimaryContainer
+                        : scheme.onSurfaceVariant,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
               ),
-              child: Text(
-                labelOf(tab),
-                style: labelMedium?.copyWith(
-                  color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
