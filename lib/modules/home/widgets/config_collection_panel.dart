@@ -89,7 +89,9 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: widget.horizontal
+            ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
+            : const EdgeInsets.all(12),
         child: Obx(() {
           final activeDragPayload = widget.controller.activeDragPayload.value;
           if (activeDragPayload == null) {
@@ -149,7 +151,7 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
                 _buildHorizontalToolbar(context),
                 const SizedBox(height: 8),
                 SizedBox(
-                  height: 66,
+                  height: 60,
                   child: hasConfigs
                       ? listView
                       : Center(
@@ -404,25 +406,80 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
 
   /// Builds the single-row compact toolbar for the horizontal top config bar.
   Widget _buildHorizontalToolbar(BuildContext context) {
-    final style = Theme.of(context).textTheme.titleMedium;
-    final separatorStyle = style?.copyWith(
-      color: Theme.of(context).colorScheme.outline,
-      fontWeight: FontWeight.w600,
-    );
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final filter = widget.controller.stateFilter.value;
     final isFiltered = filter != HomeScriptStateFilter.all;
+    final running = widget.controller.countScriptsByState(
+      HomeScriptStateFilter.running,
+    );
+    final stopped = widget.controller.countScriptsByState(
+      HomeScriptStateFilter.stopped,
+    );
+    final abnormal = widget.controller.countScriptsByState(
+      HomeScriptStateFilter.abnormal,
+    );
     return Row(
       children: [
-        _HeaderTitle(
-          controller: widget.controller,
-          style: style,
-          separatorStyle: separatorStyle,
-          centered: false,
+        Icon(Icons.layers_outlined, size: 16, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          I18n.scriptList.tr,
+          style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: scheme.secondaryContainer.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '$running',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.green.shade600,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                TextSpan(
+                  text: ' / ',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: scheme.outline,
+                  ),
+                ),
+                TextSpan(
+                  text: '$stopped',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: scheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                TextSpan(
+                  text: ' / ',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: scheme.outline,
+                  ),
+                ),
+                TextSpan(
+                  text: '$abnormal',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         const Spacer(),
         SizedBox(
-          width: 210,
+          width: 190,
           child: _SearchField(
             controller: _searchController,
             onChanged: widget.controller.setSearchQuery,
@@ -435,8 +492,8 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
           isFiltered: isFiltered,
           onSelected: widget.controller.setStateFilterValue,
           stateLabel: _stateLabel,
+          compact: true,
         ),
-        const SizedBox(width: 4),
         _HeaderActions(
           controller: widget.controller,
           refreshingScripts: widget.refreshingScripts,
@@ -444,6 +501,7 @@ class _ConfigCollectionPanelState extends State<ConfigCollectionPanel> {
           onRefreshScriptsTap: widget.onRefreshScriptsTap,
           onAddScriptTap: widget.onAddScriptTap,
           centered: false,
+          compact: true,
         ),
       ],
     );
@@ -657,6 +715,7 @@ class _HeaderActions extends StatelessWidget {
     required this.onRefreshScriptsTap,
     required this.onAddScriptTap,
     required this.centered,
+    this.compact = false,
   });
 
   final HomeDashboardController controller;
@@ -665,9 +724,13 @@ class _HeaderActions extends StatelessWidget {
   final VoidCallback onRefreshScriptsTap;
   final VoidCallback onAddScriptTap;
   final bool centered;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final size = compact ? 28.0 : 36.0;
+    final iconSize = compact ? 16.0 : 22.0;
+    final constraints = BoxConstraints.tightFor(width: size, height: size);
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: centered
@@ -678,12 +741,14 @@ class _HeaderActions extends StatelessWidget {
           tooltip: I18n.homeConnectionRetryAction.tr,
           onPressed: refreshingScripts ? null : onRefreshScriptsTap,
           visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+          padding: EdgeInsets.zero,
+          iconSize: iconSize,
+          constraints: constraints,
           icon: refreshingScripts
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              ? SizedBox(
+                  width: compact ? 14 : 16,
+                  height: compact ? 14 : 16,
+                  child: const CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.refresh_rounded),
         ),
@@ -693,7 +758,9 @@ class _HeaderActions extends StatelessWidget {
               : I18n.turnOnTheLinker.tr,
           onPressed: controller.toggleLinkMode,
           visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+          padding: EdgeInsets.zero,
+          iconSize: iconSize,
+          constraints: constraints,
           style: IconButton.styleFrom(
             backgroundColor: controller.isLinkModeEnabled.value
                 ? Theme.of(context).colorScheme.primaryContainer
@@ -708,12 +775,14 @@ class _HeaderActions extends StatelessWidget {
           tooltip: I18n.configAdd.tr,
           onPressed: loadingAddScript ? null : onAddScriptTap,
           visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+          padding: EdgeInsets.zero,
+          iconSize: iconSize,
+          constraints: constraints,
           icon: loadingAddScript
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              ? SizedBox(
+                  width: compact ? 14 : 16,
+                  height: compact ? 14 : 16,
+                  child: const CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.add_rounded),
         ),
@@ -738,30 +807,41 @@ class _SearchField extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return TextFormField(
       controller: controller,
-      style: compact ? Theme.of(context).textTheme.bodySmall : null,
+      style: compact ? Theme.of(context).textTheme.labelSmall : null,
       decoration: InputDecoration(
-        prefixIcon: Icon(Icons.search_rounded, size: compact ? 16 : 20),
+        prefixIcon: Icon(Icons.search_rounded, size: compact ? 14 : 20),
         prefixIconConstraints: compact
-            ? const BoxConstraints(minWidth: 32, minHeight: 32)
+            ? const BoxConstraints(minWidth: 28, minHeight: 26)
             : null,
         hintText: I18n.homeScriptSearchHint.tr,
+        hintStyle: compact
+            ? Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              )
+            : null,
         filled: true,
-        fillColor: scheme.surfaceContainerLowest,
+        fillColor: compact
+            ? scheme.surfaceContainerHigh
+            : scheme.surfaceContainerLowest,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(compact ? 8 : 10),
+          borderSide: compact
+              ? BorderSide.none
+              : BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(compact ? 8 : 10),
+          borderSide: compact
+              ? BorderSide.none
+              : BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(compact ? 8 : 10),
           borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
         isDense: true,
         contentPadding: compact
-            ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
             : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       onChanged: onChanged,
@@ -775,17 +855,20 @@ class _FilterButton extends StatelessWidget {
     required this.isFiltered,
     required this.onSelected,
     required this.stateLabel,
+    this.compact = false,
   });
 
   final HomeScriptStateFilter filter;
   final bool isFiltered;
   final ValueChanged<HomeScriptStateFilter> onSelected;
   final String Function(HomeScriptStateFilter value) stateLabel;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final dimension = compact ? 28.0 : 40.0;
     return SizedBox.square(
-      dimension: 40,
+      dimension: dimension,
       child: PopupMenuButton<HomeScriptStateFilter>(
         padding: EdgeInsets.zero,
         tooltip: stateLabel(filter),
@@ -801,6 +884,7 @@ class _FilterButton extends StatelessWidget {
             .toList(),
         icon: Icon(
           Icons.filter_list_rounded,
+          size: compact ? 16 : 20,
           color: isFiltered ? Theme.of(context).colorScheme.primary : null,
         ),
       ),

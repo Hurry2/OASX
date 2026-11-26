@@ -63,9 +63,11 @@ class _ConfigCollectionTileState extends State<ConfigCollectionTile> {
               (widget.dragHandle != null ? 28 : 0);
           final isCompact = constraints.maxWidth < compactThreshold;
           final rowColor = isActive
-              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.42)
               : (widget.horizontal
-                    ? theme.colorScheme.surfaceContainerLowest
+                    ? theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.45,
+                      )
                     : theme.cardColor);
           final accentColor = _accentColor(
             context,
@@ -88,7 +90,7 @@ class _ConfigCollectionTileState extends State<ConfigCollectionTile> {
           final bodyRow = Padding(
             padding: EdgeInsets.symmetric(
               horizontal: widget.horizontal ? 8 : 10,
-              vertical: widget.horizontal ? 6 : (isCompact ? 8 : 10),
+              vertical: widget.horizontal ? 5 : (isCompact ? 8 : 10),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -226,11 +228,11 @@ class _ConfigCollectionTileState extends State<ConfigCollectionTile> {
           if (widget.horizontal) {
             return ConstrainedBox(
               constraints: BoxConstraints(
-                minWidth: showLinkCheckbox ? 236 : 210,
-                maxWidth: showLinkCheckbox ? 304 : 276,
+                minWidth: showLinkCheckbox ? 236 : 204,
+                maxWidth: showLinkCheckbox ? 304 : 272,
               ),
               child: SizedBox(
-                height: 62,
+                height: 56,
                 child: IntrinsicWidth(child: tileContent),
               ),
             );
@@ -315,25 +317,46 @@ class _ScriptMeta extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (dragHandle != null) ...[dragHandle!, const SizedBox(width: 2)],
-          _RegularAccentBar(
-            key: ValueKey<String>('config-accent-bar-${script.name}'),
-            color: accentColor,
-          ),
-          SizedBox(width: horizontal ? 8 : 10),
+          if (!horizontal) ...[
+            _RegularAccentBar(
+              key: ValueKey<String>('config-accent-bar-${script.name}'),
+              color: accentColor,
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Tooltip(
-                  message: script.name,
-                  waitDuration: const Duration(milliseconds: 500),
-                  child: ConfigCollectionScriptLabel(
-                    script: script,
-                    centered: false,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (horizontal) ...[
+                      Container(
+                        key: ValueKey<String>('config-accent-bar-${script.name}'),
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Flexible(
+                      child: Tooltip(
+                        message: script.name,
+                        waitDuration: const Duration(milliseconds: 500),
+                        child: ConfigCollectionScriptLabel(
+                          script: script,
+                          centered: false,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(height: horizontal ? 3 : 6),
+                SizedBox(height: horizontal ? 2 : 6),
                 ConfigCollectionTaskPreview(script: script),
               ],
             ),
