@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import 'package:oasx/modules/click_statistics/click_statistics_controller.dart';
 import 'package:oasx/modules/click_statistics/click_statistics_view.dart';
 import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
-import 'package:oasx/modules/home/models/home_workbench_layout.dart';
 import 'package:oasx/modules/home/widgets/last_screenshot_panel.dart';
 import 'package:oasx/modules/home/widgets/log_center_panel.dart';
 import 'package:oasx/modules/home/widgets/statistics_panel.dart';
@@ -39,8 +38,45 @@ class WorkbenchSidebarPanel extends StatelessWidget {
         if (constraints.maxWidth >= 600) {
           return _buildBentoCockpit(context);
         }
-        return _buildCompactTabbedSidebar(context);
+        return _buildNarrowBento(context, constraints.maxWidth);
       },
+    );
+  }
+
+  /// Narrow fallback when the user drags the divider to shrink the right pane:
+  /// keeps the same Bento layout without reverting to the legacy tab bar.
+  Widget _buildNarrowBento(BuildContext context, double maxWidth) {
+    final showBottomSplit = maxWidth >= 460;
+    return Column(
+      children: [
+        Expanded(child: LogCenterPanel(scriptName: scriptName)),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 204,
+          child: showBottomSplit
+              ? Row(
+                  children: [
+                    Expanded(
+                      flex: 9,
+                      child: LastScreenshotPanel(
+                        scriptName: scriptName,
+                        compact: true,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      flex: 11,
+                      child: StatisticsPieCard(
+                        onOpenFullStats: () => _openStatsDialog(context),
+                      ),
+                    ),
+                  ],
+                )
+              : StatisticsPieCard(
+                  onOpenFullStats: () => _openStatsDialog(context),
+                ),
+        ),
+      ],
     );
   }
 
@@ -154,78 +190,6 @@ class WorkbenchSidebarPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactTabbedSidebar(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Obx(() {
-          final tabs = controller.workbenchSidebarTabsFor(
-            HomeWorkbenchLayoutMode.threePane,
-          );
-          final currentTab = controller.displayedWorkbenchSidebarTabFor(
-            HomeWorkbenchLayoutMode.threePane,
-          );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    // --- 细线 Tab 行替换 ChoiceChip ---
-                    child: _SidebarTabBar(
-                      tabs: tabs,
-                      currentTab: currentTab,
-                      labelOf: _tabLabel,
-                      onTap: controller.setActiveWorkbenchSidebarTabValue,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    key: const ValueKey<String>(
-                      'home-workbench-collapse-right-sidebar',
-                    ),
-                    tooltip: I18n.homeCollapseSidebar.tr,
-                    onPressed: onCollapse,
-                    iconSize: 20,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.keyboard_double_arrow_right_rounded,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: switch (currentTab) {
-                  HomeWorkbenchTab.stats => const ScriptStatisticsPanel(),
-                  HomeWorkbenchTab.logs => LogCenterPanel(
-                    scriptName: scriptName,
-                  ),
-                  HomeWorkbenchTab.storageStats => StorageStatsPanel(
-                    scriptName: scriptName,
-                  ),
-                  HomeWorkbenchTab.clickStats => WorkbenchClickStatisticsPanel(
-                    scriptName: scriptName,
-                  ),
-                  _ => const SizedBox.shrink(),
-                },
-              ),
-              if (currentTab != HomeWorkbenchTab.stats) ...[
-                const SizedBox(height: 10),
-                StatisticsPieCard(
-                  onOpenFullStats: () =>
-                      controller.setActiveWorkbenchSidebarTabValue(
-                        HomeWorkbenchTab.stats,
-                      ),
-                ),
-              ],
-            ],
-          );
-        }),
-      ),
-    );
-  }
-
   Future<void> _openStatsDialog(BuildContext context) {
     return showDialog<void>(
       context: context,
@@ -304,70 +268,6 @@ class WorkbenchSidebarPanel extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  /// Resolves a localized label for one sidebar tab.
-  String _tabLabel(HomeWorkbenchTab value) {
-    return switch (value) {
-      HomeWorkbenchTab.stats => I18n.homeStatsTab.tr,
-      HomeWorkbenchTab.logs => I18n.log.tr,
-      HomeWorkbenchTab.storageStats => I18n.storageStatsTab.tr,
-      HomeWorkbenchTab.clickStats => I18n.homeClickStatsTab.tr,
-      _ => '',
-    };
-  }
-}
-
-/// 右侧面板轻量细线 Tab 行。
-class _SidebarTabBar extends StatelessWidget {
-  const _SidebarTabBar({
-    required this.tabs,
-    required this.currentTab,
-    required this.labelOf,
-    required this.onTap,
-  });
-
-  final List<HomeWorkbenchTab> tabs;
-  final HomeWorkbenchTab currentTab;
-  final String Function(HomeWorkbenchTab) labelOf;
-  final void Function(HomeWorkbenchTab) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final labelMedium = Theme.of(context).textTheme.labelMedium;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: tabs.map((tab) {
-          final isSelected = tab == currentTab;
-          return InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: () => onTap(tab),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: isSelected ? scheme.primary : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-              ),
-              child: Text(
-                labelOf(tab),
-                style: labelMedium?.copyWith(
-                  color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
       ),
     );
   }

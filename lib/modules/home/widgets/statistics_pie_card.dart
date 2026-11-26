@@ -180,69 +180,84 @@ class _StatisticsPieCardState extends State<StatisticsPieCard> {
       );
     }
     final total = slices.fold<double>(0, (sum, item) => sum + item.value);
-    return Row(
-      children: [
-        SizedBox(
-          width: 132,
-          child: PieChart(
-            PieChartData(
-              pieTouchData: PieTouchData(
-                touchCallback: (event, response) {
-                  if (!event.isInterestedForInteractions ||
-                      response == null ||
-                      response.touchedSection == null) {
-                    if (_touchedIndex != -1) {
-                      setState(() => _touchedIndex = -1);
-                    }
-                    return;
-                  }
-                  final index = response.touchedSection!.touchedSectionIndex;
-                  if (index != _touchedIndex) {
-                    setState(() => _touchedIndex = index);
-                  }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 340;
+        final chartWidth = isCompact ? 104.0 : 132.0;
+        final centerRadius = isCompact ? 18.0 : 24.0;
+        final baseRadius = isCompact ? 30.0 : 36.0;
+        final touchedRadius = isCompact ? 34.0 : 42.0;
+        return Row(
+          children: [
+            SizedBox(
+              width: chartWidth,
+              child: PieChart(
+                PieChartData(
+                  pieTouchData: PieTouchData(
+                    touchCallback: (event, response) {
+                      if (!event.isInterestedForInteractions ||
+                          response == null ||
+                          response.touchedSection == null) {
+                        if (_touchedIndex != -1) {
+                          setState(() => _touchedIndex = -1);
+                        }
+                        return;
+                      }
+                      final index =
+                          response.touchedSection!.touchedSectionIndex;
+                      if (index != _touchedIndex) {
+                        setState(() => _touchedIndex = index);
+                      }
+                    },
+                  ),
+                  borderData: FlBorderData(show: false),
+                  sectionsSpace: 2,
+                  centerSpaceRadius: centerRadius,
+                  sections: List<PieChartSectionData>.generate(slices.length, (
+                    i,
+                  ) {
+                    final slice = slices[i];
+                    final isTouched = i == _touchedIndex;
+                    final percent =
+                        total > 0 ? (slice.value / total * 100) : 0.0;
+                    return PieChartSectionData(
+                      color: slice.color,
+                      value: slice.value,
+                      radius: isTouched ? touchedRadius : baseRadius,
+                      title: percent >= 10 ? '${percent.round()}%' : '',
+                      titleStyle: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+            SizedBox(width: isCompact ? 8 : 12),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: slices.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  final slice = slices[index];
+                  final isHighlighted = index == _touchedIndex;
+                  final percent =
+                      total > 0 ? (slice.value / total * 100) : 0.0;
+                  return _LegendRow(
+                    slice: slice,
+                    percentText:
+                        '${percent.toStringAsFixed(percent >= 10 ? 0 : 1)}%',
+                    highlighted: isHighlighted,
+                  );
                 },
               ),
-              borderData: FlBorderData(show: false),
-              sectionsSpace: 2,
-              centerSpaceRadius: 24,
-              sections: List<PieChartSectionData>.generate(slices.length, (i) {
-                final slice = slices[i];
-                final isTouched = i == _touchedIndex;
-                final percent = total > 0 ? (slice.value / total * 100) : 0.0;
-                return PieChartSectionData(
-                  color: slice.color,
-                  value: slice.value,
-                  radius: isTouched ? 42 : 36,
-                  title: percent >= 10 ? '${percent.round()}%' : '',
-                  titleStyle: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                );
-              }),
             ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ListView.separated(
-            padding: EdgeInsets.zero,
-            itemCount: slices.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 4),
-            itemBuilder: (context, index) {
-              final slice = slices[index];
-              final isHighlighted = index == _touchedIndex;
-              final percent = total > 0 ? (slice.value / total * 100) : 0.0;
-              return _LegendRow(
-                slice: slice,
-                percentText: '${percent.toStringAsFixed(percent >= 10 ? 0 : 1)}%',
-                highlighted: isHighlighted,
-              );
-            },
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
