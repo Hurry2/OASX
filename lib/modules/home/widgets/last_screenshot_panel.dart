@@ -489,31 +489,36 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
                   ),
                   if (label != null) ...[
                     const SizedBox(width: 6),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scheme.secondaryContainer.withValues(
-                            alpha: 0.65,
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
                           ),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.onSecondaryContainer,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                          decoration: BoxDecoration(
+                            color: scheme.secondaryContainer.withValues(
+                              alpha: 0.65,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSecondaryContainer,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ],
-                  const Spacer(),
+                  ] else
+                    const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.refresh_rounded, size: 16),
                     tooltip: I18n.lastScreenshotRefresh.tr,
