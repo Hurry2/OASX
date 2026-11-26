@@ -120,12 +120,12 @@ class ActiveConfigPanel extends StatelessWidget {
                   IconButton(
                     tooltip: isRunning ? I18n.stop.tr : I18n.run.tr,
                     onPressed: () => onTogglePower(script.name, !isRunning),
-                    iconSize: 16,
+                    iconSize: 24,
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
+                      width: 40,
+                      height: 40,
                     ),
                     icon: Icon(
                       Icons.power_settings_new_rounded,
@@ -234,14 +234,14 @@ class _BulkQuickScheduleButton extends StatelessWidget {
     return IconButton(
       tooltip: tooltip,
       onPressed: loading ? null : onPressed,
-      iconSize: 16,
+      iconSize: 24,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
       icon: loading
           ? SizedBox(
-              width: 14,
-              height: 14,
+              width: 18,
+              height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: scheme.primary,
