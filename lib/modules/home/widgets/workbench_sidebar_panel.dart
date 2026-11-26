@@ -119,15 +119,14 @@ class WorkbenchSidebarPanel extends StatelessWidget {
                           IconButton(
                             tooltip: I18n.homeClickStatsTab.tr,
                             onPressed: () => _openClickStatsDialog(context),
-                            iconSize: 17,
+                            iconSize: 18,
                             visualDensity: VisualDensity.compact,
                             constraints: const BoxConstraints.tightFor(
                               width: 28,
                               height: 28,
                             ),
                             padding: EdgeInsets.zero,
-                            icon: Icon(
-                              Icons.grid_view_rounded,
+                            icon: _HeatmapMouseIcon(
                               color: scheme.onSurfaceVariant,
                             ),
                           ),
@@ -243,9 +242,7 @@ class WorkbenchSidebarPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(
-                      Icons.grid_view_rounded,
-                      size: 18,
+                    _HeatmapMouseIcon(
                       color: Theme.of(dialogContext).colorScheme.primary,
                     ),
                     const SizedBox(width: 8),
@@ -319,5 +316,38 @@ class _WorkbenchClickStatisticsPanelState
   Widget build(BuildContext context) {
     _ensureController();
     return ClickStatisticsView(embedded: true);
+  }
+}
+
+/// 鼠标 + 火焰组合图标，用于热力图入口。
+class _HeatmapMouseIcon extends StatelessWidget {
+  const _HeatmapMouseIcon({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: Icon(Icons.mouse_outlined, size: 16, color: color),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Icon(
+              Icons.local_fire_department_rounded,
+              size: 11,
+              color: Colors.deepOrange.shade500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
