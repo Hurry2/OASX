@@ -99,7 +99,7 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
                         message: _placeholderMessage(),
                         loading: _isLoading,
                       )
-                    : (prefs.trendViewEnabled.value
+                    : (!isCompact && prefs.trendViewEnabled.value
                           ? StorageStatsTrendPanel(controller: controller)
                           : _StorageStatsContent(
                               controller: controller,
@@ -192,7 +192,7 @@ class _StorageStatsToolbar extends StatelessWidget {
   /// shows the covered range instead.
   Widget _leadingControls(BuildContext context) {
     final theme = Theme.of(context);
-    if (prefs.trendViewEnabled.value) {
+    if (!compact && prefs.trendViewEnabled.value) {
       return Align(
         alignment: Alignment.centerLeft,
         child: Text(
@@ -272,7 +272,13 @@ class _StorageStatsToolbar extends StatelessWidget {
               ),
             ),
           ),
-        if (day != null) _viewToggle(iconSize: iconSize, constraints: constraints, padding: padding),
+        if (day != null)
+          _viewToggle(
+            context,
+            iconSize: iconSize,
+            constraints: constraints,
+            padding: padding,
+          ),
         if (day != null)
           IconButton(
             tooltip: I18n.storageStatsCleanup.tr,
@@ -309,11 +315,22 @@ class _StorageStatsToolbar extends StatelessWidget {
   /// Own `Obx` on purpose: the panel's outer `Obx` only tracks what its own
   /// builder reads, and this button must follow the preference by itself.
   /// The icon shows the view it switches *to*, and the tooltip names it.
-  Widget _viewToggle({
+  Widget _viewToggle(
+    BuildContext context, {
     required double iconSize,
     required BoxConstraints? constraints,
     required EdgeInsetsGeometry? padding,
   }) {
+    if (compact) {
+      return IconButton(
+        tooltip: I18n.storageStatsViewTrend.tr,
+        onPressed: () => _openTrendDialog(context),
+        iconSize: iconSize,
+        constraints: constraints,
+        padding: padding,
+        icon: const Icon(Icons.show_chart_rounded),
+      );
+    }
     return Obx(() {
       final trend = prefs.trendViewEnabled.value;
       return IconButton(
@@ -326,6 +343,48 @@ class _StorageStatsToolbar extends StatelessWidget {
         icon: Icon(trend ? Icons.view_list_rounded : Icons.show_chart_rounded),
       );
     });
+  }
+
+  Future<void> _openTrendDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1020, maxHeight: 820),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.show_chart_rounded,
+                      size: 18,
+                      color: Theme.of(dialogContext).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      I18n.storageStatsViewTrend.tr,
+                      style: Theme.of(dialogContext).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const Divider(height: 12),
+                Expanded(
+                  child: StorageStatsTrendPanel(controller: controller),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -195,7 +195,7 @@ class WorkbenchSidebarPanel extends StatelessWidget {
       builder: (dialogContext) => Dialog(
         insetPadding: const EdgeInsets.all(24),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760, maxHeight: 620),
+          constraints: const BoxConstraints(maxWidth: 1020, maxHeight: 820),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -235,7 +235,7 @@ class WorkbenchSidebarPanel extends StatelessWidget {
       builder: (dialogContext) => Dialog(
         insetPadding: const EdgeInsets.all(24),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 820, maxHeight: 640),
+          constraints: const BoxConstraints(maxWidth: 1100, maxHeight: 850),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
