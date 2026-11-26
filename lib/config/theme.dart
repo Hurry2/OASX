@@ -13,16 +13,16 @@ const List<String> _webChineseFontFallback = <String>[
   'sans-serif',
 ];
 
-/// 一套"看着舒服"的配色种子：低饱和、明暗模式下都不刺眼。
+/// 精选高辨识度现代配色种子（参照 Linear / Cyber Mint / Matcha / Nord / Rosé / Sunset）。
 ///
-/// 只挑一个种子色，其余由 M3 的 `colorSchemeSeed` 自动配平（含深浅两套）。
+/// 搭配 M3 `DynamicSchemeVariant.vibrant`，让每个配色的主色与容器色都有明显区分。
 enum AppAccentTheme {
-  indigo('靛蓝 Indigo', Color(0xff5B6ABF)),
-  teal('青碧 Teal', Color(0xff2F7D74)),
-  forest('森绿 Forest', Color(0xff3F7D4F)),
-  ocean('海蓝 Ocean', Color(0xff2F6F9F)),
-  violet('紫罗兰 Violet', Color(0xff7A5AA8)),
-  clay('暖陶 Clay', Color(0xffB06A4A));
+  indigo('靛蓝 Indigo', Color(0xff4F46E5)),
+  teal('青碧 Mint', Color(0xff0D9488)),
+  forest('森绿 Matcha', Color(0xff16A34A)),
+  ocean('海蓝 Nord', Color(0xff0284C7)),
+  violet('紫罗兰 Rosé', Color(0xff9333EA)),
+  clay('珊瑚橘 Coral', Color(0xffEA580C));
 
   const AppAccentTheme(this.label, this.seed);
 
@@ -33,14 +33,14 @@ enum AppAccentTheme {
   final Color seed;
 }
 
-/// 界面背景预设：每种都给出明/暗两版，避免反色模式下糊成一片。
+/// 界面背景预设：每种都给出明/暗两版，且与纯白拉开明显氛围差距。
 enum AppBackgroundTheme {
   auto('跟随主题 Auto', null, null),
-  snow('纯白 Snow', Color(0xffFFFFFF), Color(0xff1B1B1F)),
-  warm('暖白 Warm', Color(0xffFAF7F2), Color(0xff23211E)),
-  paper('米纸 Paper', Color(0xffF5F3EC), Color(0xff26241F)),
-  mist('雾青 Mist', Color(0xffF1F5F4), Color(0xff1E2423)),
-  night('夜墨 Ink', Color(0xffF2F3F7), Color(0xff121316));
+  snow('极简 Snow', Color(0xffFFFFFF), Color(0xff0F1117)),
+  warm('奶油 Warm', Color(0xffFDF6EC), Color(0xff1E1815)),
+  paper('羊皮纸 Paper', Color(0xffF4EBD9), Color(0xff211D18)),
+  mist('雾青 Mist', Color(0xffE6F4F1), Color(0xff101E20)),
+  night('暮色 Ink', Color(0xffECEEF8), Color(0xff0D101B));
 
   const AppBackgroundTheme(this.label, this.light, this.dark);
 
@@ -76,14 +76,18 @@ ThemeData buildAppTheme({
   final fallback = isLight ? _defaultLightBackground : _defaultDarkBackground;
   final backgroundColor =
       (isLight ? background.light : background.dark) ?? fallback;
+  final scheme = ColorScheme.fromSeed(
+    seedColor: accent.seed,
+    brightness: brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
+  );
   final base = ThemeData(
-    colorSchemeSeed: accent.seed,
+    colorScheme: scheme,
     useMaterial3: true,
     brightness: brightness,
     textTheme: _buildTextTheme(brightness),
   );
   if (surfaceAlpha < 1.0) {
-    final scheme = base.colorScheme;
     return base.copyWith(
       colorScheme: scheme.copyWith(
         surface: _withSurfaceAlpha(scheme.surface, surfaceAlpha),
