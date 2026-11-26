@@ -561,7 +561,7 @@ class _StorageResourceCard extends StatelessWidget {
         ? ''
         : formatStorageStatsDelta(currentDelta);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(10),
@@ -585,13 +585,9 @@ class _StorageResourceCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (deltaText.isNotEmpty && currentDelta != null) ...[
-                const SizedBox(width: 4),
-                StorageDeltaLabel(delta: currentDelta, text: deltaText),
-              ],
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           SizedBox(
             width: double.infinity,
             child: Align(
@@ -604,6 +600,23 @@ class _StorageResourceCard extends StatelessWidget {
                     : Tooltip(message: valueTooltip, child: valueText),
               ),
             ),
+          ),
+          const SizedBox(height: 2),
+          SizedBox(
+            height: 15,
+            child: deltaText.isNotEmpty && currentDelta != null
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: StorageDeltaLabel(
+                        delta: currentDelta,
+                        text: deltaText,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
