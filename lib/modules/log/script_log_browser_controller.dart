@@ -198,6 +198,9 @@ class ScriptLogBrowserController extends GetxController {
   /// Active info load request id.
   int _infoLoadRequestId = 0;
 
+  /// Whether the latest task section has already been auto-opened once.
+  bool _hasAutoOpenedLatestTask = false;
+
   /// Active older log request id.
   int _olderLoadRequestId = 0;
 

@@ -20,6 +20,12 @@ extension ScriptLogBrowserInfoX on ScriptLogBrowserController {
       applyFreshWindow(window);
       _shouldRefreshLatestOnInfoResume = false;
       infoLoading.value = false;
+      if (!_hasAutoOpenedLatestTask &&
+          !isLogTaskOpened &&
+          visibleLogSections.isNotEmpty) {
+        _hasAutoOpenedLatestTask = true;
+        openLogTask(visibleLogSections.last.key);
+      }
       unawaited(startStream(requestId));
       syncBottomAfterFrame();
     } catch (error) {

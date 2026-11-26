@@ -28,11 +28,19 @@ class LogCenterToolbar extends StatelessWidget {
 
   /// Builds title and tab switch on the left.
   Widget _leadingControls(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [_tabSwitch()],
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Icon(Icons.article_outlined, size: 16, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          I18n.log.tr,
+          style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(width: 8),
+        _tabSwitch(context),
+      ],
     );
   }
 
@@ -42,10 +50,8 @@ class LogCenterToolbar extends StatelessWidget {
       if (!_shouldShowLogActions()) {
         return const SizedBox.shrink();
       }
-      return Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (_shouldShowWrapAction()) _wrapButton(),
           if (controller.activeTab.value == ScriptLogBrowserTab.info)
@@ -73,65 +79,145 @@ class LogCenterToolbar extends StatelessWidget {
     return controller.errorDetailVisible.value;
   }
 
-  /// Builds the info/error tab selector.
-  Widget _tabSwitch() {
-    return Obx(
-      () => SegmentedButton<ScriptLogBrowserTab>(
-        showSelectedIcon: false,
-        segments: [
-          ButtonSegment(
-            value: ScriptLogBrowserTab.info,
-            label: Text(I18n.homeLogInfoTab.tr),
-          ),
-          ButtonSegment(
-            value: ScriptLogBrowserTab.error,
-            label: Text(I18n.homeLogErrorTab.tr),
-          ),
-        ],
-        selected: {controller.activeTab.value},
-        onSelectionChanged: (values) => controller.selectTab(values.first),
-      ),
-    );
+  /// Builds the info/error tab selector matching the compact pill switch style.
+  Widget _tabSwitch(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Obx(() {
+      final active = controller.activeTab.value;
+      return Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LogTabPill(
+              label: I18n.homeLogInfoTab.tr,
+              selected: active == ScriptLogBrowserTab.info,
+              onTap: () => controller.selectTab(ScriptLogBrowserTab.info),
+            ),
+            _LogTabPill(
+              label: I18n.homeLogErrorTab.tr,
+              selected: active == ScriptLogBrowserTab.error,
+              onTap: () => controller.selectTab(ScriptLogBrowserTab.error),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _autoScrollButton() {
     final enabled = controller.autoScroll.value;
-    return IconButton(
+    return _CompactToolbarIcon(
       tooltip: I18n.homeLogAutoScroll.tr,
       onPressed: controller.toggleAutoScroll,
-      icon: Icon(enabled ? Icons.flash_on_rounded : Icons.flash_off_rounded),
+      icon: enabled ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+      active: enabled,
     );
   }
 
   /// Builds the long-line wrapping action.
   Widget _wrapButton() {
     final enabled = controller.wrapLines.value;
-    return IconButton(
+    return _CompactToolbarIcon(
       tooltip: I18n.homeLogWrapLines.tr,
       onPressed: onToggleLineWrap,
-      icon: Icon(enabled ? Icons.wrap_text : Icons.short_text),
+      icon: enabled ? Icons.wrap_text_rounded : Icons.short_text_rounded,
+      active: enabled,
     );
   }
 
   /// Builds the copy action.
   Widget _copyButton() {
-    return IconButton(
+    return _CompactToolbarIcon(
       tooltip: I18n.copy.tr,
       onPressed: _copyCurrent,
-      icon: const Icon(Icons.content_copy_rounded),
+      icon: Icons.copy_rounded,
     );
   }
 
   /// Builds the clear action.
   Widget _clearButton() {
-    return IconButton(
+    return _CompactToolbarIcon(
       tooltip: I18n.clearLog.tr,
       onPressed: controller.clearCurrentView,
-      icon: const Icon(Icons.delete_outlined),
+      icon: Icons.delete_outlined,
     );
   }
 
   void _copyCurrent() {
     controller.copyCurrentView();
+  }
+}
+
+class _LogTabPill extends StatelessWidget {
+  const _LogTabPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? scheme.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: selected
+                ? scheme.onPrimaryContainer
+                : scheme.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactToolbarIcon extends StatelessWidget {
+  const _CompactToolbarIcon({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+    this.active = false,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+  final IconData icon;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      iconSize: 16,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+      icon: Icon(
+        icon,
+        color: active ? scheme.primary : scheme.onSurfaceVariant,
+      ),
+    );
   }
 }

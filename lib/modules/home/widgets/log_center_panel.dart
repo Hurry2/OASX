@@ -94,7 +94,7 @@ class _LogCenterPanelState extends State<LogCenterPanel> {
     }
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -102,7 +102,7 @@ class _LogCenterPanelState extends State<LogCenterPanel> {
               controller: controller,
               onToggleLineWrap: () => _handleLogCenterLineWrapToggle(this),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Expanded(
               child: Obx(
                 () => controller.activeTab.value == ScriptLogBrowserTab.info
