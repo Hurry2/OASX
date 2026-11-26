@@ -43,6 +43,7 @@ class StorageStatsDateButton extends StatefulWidget {
     required this.selected,
     required this.dates,
     required this.onSelected,
+    this.compact = false,
   });
 
   /// Date currently rendered, `YYYY-MM-DD`.
@@ -53,6 +54,9 @@ class StorageStatsDateButton extends StatefulWidget {
 
   /// Called with the picked `YYYY-MM-DD`.
   final ValueChanged<String> onSelected;
+
+  /// Compact pill styling used in the desktop sidebar.
+  final bool compact;
 
   @override
   State<StorageStatsDateButton> createState() => _StorageStatsDateButtonState();
@@ -76,32 +80,47 @@ class _StorageStatsDateButtonState extends State<StorageStatsDateButton> {
       message: I18n.storageStatsDate.tr,
       child: InkWell(
         onTap: widget.dates.isEmpty ? null : _toggle,
-        borderRadius: BorderRadius.circular(_kDateButtonRadius),
+        borderRadius: BorderRadius.circular(
+          widget.compact ? 8 : _kDateButtonRadius,
+        ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.compact ? 8 : 12,
+            vertical: widget.compact ? 5 : 9,
+          ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_kDateButtonRadius),
-            border: Border.all(color: scheme.outlineVariant),
+            color: widget.compact ? scheme.surfaceContainerHigh : null,
+            borderRadius: BorderRadius.circular(
+              widget.compact ? 8 : _kDateButtonRadius,
+            ),
+            border: widget.compact
+                ? null
+                : Border.all(color: scheme.outlineVariant),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.calendar_today_rounded,
-                size: 16,
+                size: widget.compact ? 13 : 16,
                 color: scheme.onSurfaceVariant,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: widget.compact ? 5 : 8),
               Flexible(
                 child: Text(
                   _buttonLabel(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge,
+                  style: widget.compact
+                      ? theme.textTheme.labelSmall
+                      : theme.textTheme.labelLarge,
                 ),
               ),
-              const SizedBox(width: 6),
-              const Icon(Icons.arrow_drop_down_rounded, size: 20),
+              SizedBox(width: widget.compact ? 2 : 6),
+              Icon(
+                Icons.arrow_drop_down_rounded,
+                size: widget.compact ? 16 : 20,
+              ),
             ],
           ),
         ),

@@ -133,7 +133,7 @@ class _HomeWorkbenchBodyState extends State<HomeWorkbenchBody> {
       key: const ValueKey<String>('home-workbench-desktop'),
       children: [
         collection,
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Expanded(
           child: Row(
             children: [

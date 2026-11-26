@@ -105,8 +105,7 @@ extension HomeDashboardWorkspaceX on HomeDashboardController {
 
   bool get isStatsVisibleInCurrentLayout {
     if (workbenchLayoutMode.value == HomeWorkbenchLayoutMode.threePane) {
-      return displayedWorkbenchSidebarTabFor(workbenchLayoutMode.value) ==
-          HomeWorkbenchTab.stats;
+      return true;
     }
     return activeWorkbenchTab.value == HomeWorkbenchTab.stats;
   }
@@ -114,8 +113,7 @@ extension HomeDashboardWorkspaceX on HomeDashboardController {
   /// Returns whether the storage (纳物库) tab is currently rendered.
   bool get isStorageStatsVisibleInCurrentLayout {
     if (workbenchLayoutMode.value == HomeWorkbenchLayoutMode.threePane) {
-      return displayedWorkbenchSidebarTabFor(workbenchLayoutMode.value) ==
-          HomeWorkbenchTab.storageStats;
+      return true;
     }
     return activeWorkbenchTab.value == HomeWorkbenchTab.storageStats;
   }

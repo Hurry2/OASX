@@ -31,10 +31,21 @@ const _kStorageResourceSpacing = 8.0;
 /// Below the grid sits the live emulator screenshot for this config.
 class StorageStatsPanel extends StatefulWidget {
   /// Creates the storage statistics panel.
-  const StorageStatsPanel({super.key, required this.scriptName});
+  const StorageStatsPanel({
+    super.key,
+    required this.scriptName,
+    this.showScreenshot = true,
+    this.forcedColumns,
+  });
 
   /// Config name the backend keys every resource snapshot and frame by.
   final String scriptName;
+
+  /// Whether to render the embedded live screenshot below the resource grid.
+  final bool showScreenshot;
+
+  /// Optional fixed column count for the resource grid (e.g. 2 for sidebar).
+  final int? forcedColumns;
 
   @override
   State<StorageStatsPanel> createState() => _StorageStatsPanelState();
@@ -66,16 +77,21 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = widget.forcedColumns != null;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(_kStoragePanelPadding),
+        padding: EdgeInsets.all(isCompact ? 10 : _kStoragePanelPadding),
         child: Obx(() {
           final day = controller.selectedDay;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _StorageStatsToolbar(controller: controller, day: day),
-              const SizedBox(height: _kStoragePanelSpacing),
+              _StorageStatsToolbar(
+                controller: controller,
+                day: day,
+                compact: isCompact,
+              ),
+              SizedBox(height: isCompact ? 8 : _kStoragePanelSpacing),
               Expanded(
                 child: day == null
                     ? _StorageStatsPlaceholder(
@@ -88,10 +104,13 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
                           : _StorageStatsContent(
                               controller: controller,
                               day: day,
+                              forcedColumns: widget.forcedColumns,
                             )),
               ),
-              const SizedBox(height: _kStoragePanelSpacing),
-              LastScreenshotPanel(scriptName: widget.scriptName),
+              if (widget.showScreenshot) ...[
+                const SizedBox(height: _kStoragePanelSpacing),
+                LastScreenshotPanel(scriptName: widget.scriptName),
+              ],
             ],
           );
         }),
@@ -140,10 +159,15 @@ class _StorageStatsPanelState extends State<StorageStatsPanel> {
 
 /// Control row: the date selector on the left, actions on the right.
 class _StorageStatsToolbar extends StatelessWidget {
-  const _StorageStatsToolbar({required this.controller, required this.day});
+  const _StorageStatsToolbar({
+    required this.controller,
+    required this.day,
+    this.compact = false,
+  });
 
   final HomeStorageStatsController controller;
   final StorageStatsDay? day;
+  final bool compact;
 
   /// Local preferences holding the active view.
   StorageStatsPrefsService get prefs => Get.find<StorageStatsPrefsService>();
@@ -190,16 +214,17 @@ class _StorageStatsToolbar extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+        spacing: compact ? 6 : 8,
+        runSpacing: compact ? 6 : 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           StorageStatsDateButton(
             selected: currentDay.date,
             dates: controller.distinctDates,
             onSelected: controller.selectDate,
+            compact: compact,
           ),
-          _SnapshotTimeDropdown(controller: controller),
+          _SnapshotTimeDropdown(controller: controller, compact: compact),
         ],
       ),
     );
@@ -223,9 +248,14 @@ class _StorageStatsToolbar extends StatelessWidget {
     final loading =
         controller.instancesLoading.value || controller.seriesLoading.value;
     final errorMessage = controller.lastErrorMessage.value;
+    final iconSize = compact ? 16.0 : 20.0;
+    final constraints = compact
+        ? const BoxConstraints.tightFor(width: 28, height: 28)
+        : null;
+    final padding = compact ? EdgeInsets.zero : null;
     return Wrap(
-      spacing: 4,
-      runSpacing: 4,
+      spacing: compact ? 2 : 4,
+      runSpacing: compact ? 2 : 4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (errorMessage.isNotEmpty)
@@ -233,32 +263,41 @@ class _StorageStatsToolbar extends StatelessWidget {
             message: errorMessage,
             child: IconButton(
               onPressed: null,
+              iconSize: iconSize,
+              constraints: constraints,
+              padding: padding,
               icon: Icon(
                 Icons.error_outline_rounded,
                 color: Theme.of(context).colorScheme.error,
               ),
             ),
           ),
-        if (day != null) _viewToggle(),
+        if (day != null) _viewToggle(iconSize: iconSize, constraints: constraints, padding: padding),
         if (day != null)
           IconButton(
             tooltip: I18n.storageStatsCleanup.tr,
             onPressed: () => showStorageStatsCleanupDialog(context),
+            iconSize: iconSize,
+            constraints: constraints,
+            padding: padding,
             icon: const Icon(Icons.cleaning_services_rounded),
           ),
         if (loading)
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: EdgeInsets.all(compact ? 6 : 12),
             child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2.2),
+              width: compact ? 16 : 20,
+              height: compact ? 16 : 20,
+              child: const CircularProgressIndicator(strokeWidth: 2.2),
             ),
           )
         else
           IconButton(
             tooltip: I18n.storageStatsRefresh.tr,
             onPressed: controller.refresh,
+            iconSize: iconSize,
+            constraints: constraints,
+            padding: padding,
             icon: const Icon(Icons.refresh_rounded),
           ),
       ],
@@ -270,13 +309,20 @@ class _StorageStatsToolbar extends StatelessWidget {
   /// Own `Obx` on purpose: the panel's outer `Obx` only tracks what its own
   /// builder reads, and this button must follow the preference by itself.
   /// The icon shows the view it switches *to*, and the tooltip names it.
-  Widget _viewToggle() {
+  Widget _viewToggle({
+    required double iconSize,
+    required BoxConstraints? constraints,
+    required EdgeInsetsGeometry? padding,
+  }) {
     return Obx(() {
       final trend = prefs.trendViewEnabled.value;
       return IconButton(
         tooltip:
             (trend ? I18n.storageStatsViewList : I18n.storageStatsViewTrend).tr,
         onPressed: () => prefs.updateTrendViewEnabled(!trend),
+        iconSize: iconSize,
+        constraints: constraints,
+        padding: padding,
         icon: Icon(trend ? Icons.view_list_rounded : Icons.show_chart_rounded),
       );
     });
@@ -289,9 +335,13 @@ class _StorageStatsToolbar extends StatelessWidget {
 /// the backend keeps every run (several runs a day included). It reads the day's
 /// timestamps straight from the controller, so it needs no request of its own.
 class _SnapshotTimeDropdown extends StatelessWidget {
-  const _SnapshotTimeDropdown({required this.controller});
+  const _SnapshotTimeDropdown({
+    required this.controller,
+    this.compact = false,
+  });
 
   final HomeStorageStatsController controller;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -301,21 +351,31 @@ class _SnapshotTimeDropdown extends StatelessWidget {
       final timestamps = controller.timestampsForSelectedDate;
       final selected = controller.selectedTimestamp.value;
       final resolved = timestamps.contains(selected) ? selected : null;
+      final labelStyle = compact
+          ? theme.textTheme.labelSmall
+          : theme.textTheme.labelLarge;
       return Tooltip(
         message: I18n.storageStatsTime.tr,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 12,
+            vertical: compact ? 2 : 2,
+          ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: scheme.outlineVariant),
+            color: compact ? scheme.surfaceContainerHigh : null,
+            borderRadius: BorderRadius.circular(compact ? 8 : 999),
+            border: compact ? null : Border.all(color: scheme.outlineVariant),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: resolved,
               isDense: true,
               borderRadius: BorderRadius.circular(10),
-              hint: Text('--', style: theme.textTheme.labelLarge),
-              icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+              hint: Text('--', style: labelStyle),
+              icon: Icon(
+                Icons.arrow_drop_down_rounded,
+                size: compact ? 16 : 20,
+              ),
               onChanged: timestamps.isEmpty
                   ? null
                   : (next) {
@@ -327,10 +387,7 @@ class _SnapshotTimeDropdown extends StatelessWidget {
                 for (final stamp in timestamps)
                   DropdownMenuItem<String>(
                     value: stamp,
-                    child: Text(
-                      _timeLabel(stamp),
-                      style: theme.textTheme.labelLarge,
-                    ),
+                    child: Text(_timeLabel(stamp), style: labelStyle),
                   ),
               ],
             ),
@@ -353,16 +410,27 @@ class _SnapshotTimeDropdown extends StatelessWidget {
 /// [StorageStatsPanel], outside the scroll area, so it stays put while the
 /// grid scrolls and reads the cached frame on the first connect.
 class _StorageStatsContent extends StatelessWidget {
-  const _StorageStatsContent({required this.controller, required this.day});
+  const _StorageStatsContent({
+    required this.controller,
+    required this.day,
+    this.forcedColumns,
+  });
 
   final HomeStorageStatsController controller;
   final StorageStatsDay day;
+  final int? forcedColumns;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: EdgeInsets.zero,
-      children: [_StorageResourceGrid(controller: controller, day: day)],
+      children: [
+        _StorageResourceGrid(
+          controller: controller,
+          day: day,
+          forcedColumns: forcedColumns,
+        ),
+      ],
     );
   }
 }
@@ -409,10 +477,15 @@ String _withThousandsSeparators(int value) {
 
 /// Resource value grid with a per-resource change indicator.
 class _StorageResourceGrid extends StatelessWidget {
-  const _StorageResourceGrid({required this.controller, required this.day});
+  const _StorageResourceGrid({
+    required this.controller,
+    required this.day,
+    this.forcedColumns,
+  });
 
   final HomeStorageStatsController controller;
   final StorageStatsDay day;
+  final int? forcedColumns;
 
   @override
   Widget build(BuildContext context) {
@@ -432,9 +505,10 @@ class _StorageResourceGrid extends StatelessWidget {
             ((available + _kStorageResourceSpacing) /
                     (_kStorageResourceMinWidth + _kStorageResourceSpacing))
                 .floor();
-        final columns = fittingColumns < 1
-            ? 1
-            : (fittingColumns > 4 ? 4 : fittingColumns);
+        final columns = forcedColumns ??
+            (fittingColumns < 1
+                ? 1
+                : (fittingColumns > 4 ? 4 : fittingColumns));
         final itemWidth =
             (available - _kStorageResourceSpacing * (columns - 1)) / columns;
         return Wrap(

@@ -6,8 +6,10 @@ import 'package:oasx/modules/click_statistics/click_statistics_controller.dart';
 import 'package:oasx/modules/click_statistics/click_statistics_view.dart';
 import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/home/models/home_workbench_layout.dart';
+import 'package:oasx/modules/home/widgets/last_screenshot_panel.dart';
 import 'package:oasx/modules/home/widgets/log_center_panel.dart';
 import 'package:oasx/modules/home/widgets/statistics_panel.dart';
+import 'package:oasx/modules/home/widgets/statistics_pie_card.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_panel.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
@@ -32,6 +34,127 @@ class WorkbenchSidebarPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 600) {
+          return _buildBentoCockpit(context);
+        }
+        return _buildCompactTabbedSidebar(context);
+      },
+    );
+  }
+
+  /// Desktop cockpit: top row has [LogCenter | 2-col Resource Monitor],
+  /// bottom row spans both columns with [Live Screenshot | Statistics Pie].
+  Widget _buildBentoCockpit(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: LogCenterPanel(scriptName: scriptName)),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 284,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 15,
+                            color: scheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            I18n.storageStatsTab.tr,
+                            style: textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: I18n.homeClickStatsTab.tr,
+                            onPressed: () => _openClickStatsDialog(context),
+                            iconSize: 17,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 28,
+                              height: 28,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(
+                              Icons.grid_view_rounded,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          IconButton(
+                            key: const ValueKey<String>(
+                              'home-workbench-collapse-right-sidebar',
+                            ),
+                            tooltip: I18n.homeCollapseSidebar.tr,
+                            onPressed: onCollapse,
+                            iconSize: 18,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 28,
+                              height: 28,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              Icons.keyboard_double_arrow_right_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: StorageStatsPanel(
+                        scriptName: scriptName,
+                        showScreenshot: false,
+                        forcedColumns: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 204,
+          child: Row(
+            children: [
+              Expanded(
+                flex: 9,
+                child: LastScreenshotPanel(
+                  scriptName: scriptName,
+                  compact: true,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                flex: 11,
+                child: StatisticsPieCard(
+                  onOpenFullStats: () => _openStatsDialog(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactTabbedSidebar(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -87,9 +210,100 @@ class WorkbenchSidebarPanel extends StatelessWidget {
                   _ => const SizedBox.shrink(),
                 },
               ),
+              if (currentTab != HomeWorkbenchTab.stats) ...[
+                const SizedBox(height: 10),
+                StatisticsPieCard(
+                  onOpenFullStats: () =>
+                      controller.setActiveWorkbenchSidebarTabValue(
+                        HomeWorkbenchTab.stats,
+                      ),
+                ),
+              ],
             ],
           );
         }),
+      ),
+    );
+  }
+
+  Future<void> _openStatsDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760, maxHeight: 620),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.bar_chart_rounded,
+                      size: 18,
+                      color: Theme.of(dialogContext).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      I18n.homeStatsTab.tr,
+                      style: Theme.of(dialogContext).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const Divider(height: 12),
+                const Expanded(child: ScriptStatisticsPanel()),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openClickStatsDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820, maxHeight: 640),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.grid_view_rounded,
+                      size: 18,
+                      color: Theme.of(dialogContext).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      I18n.homeClickStatsTab.tr,
+                      style: Theme.of(dialogContext).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const Divider(height: 12),
+                Expanded(
+                  child: WorkbenchClickStatisticsPanel(scriptName: scriptName),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

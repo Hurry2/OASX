@@ -26,7 +26,7 @@ const double kHomeWorkbenchMinDetailsWidth = 360;
 const double kHomeWorkbenchMinLogWidth = 360;
 
 /// Default split ratio for the resizable detail region.
-const double kHomeWorkbenchDefaultSplitRatio = 0.5;
+const double kHomeWorkbenchDefaultSplitRatio = 0.31;
 
 /// Identifies which detail pane is pending collapse during divider drag.
 enum HomeWorkbenchCollapseSide {

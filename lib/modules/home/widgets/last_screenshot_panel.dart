@@ -70,10 +70,17 @@ void _rememberLiveAspect(String channel, double aspectRatio) {
 /// cache TTL, the last picture also stays on screen after the script stops, so
 /// nothing has to be written to disk.
 class LastScreenshotPanel extends StatefulWidget {
-  const LastScreenshotPanel({super.key, required this.scriptName});
+  const LastScreenshotPanel({
+    super.key,
+    required this.scriptName,
+    this.compact = false,
+  });
 
   /// Config name the backend keys the frame by.
   final String scriptName;
+
+  /// Compact mode used when embedded alongside the bottom-middle pie chart.
+  final bool compact;
 
   @override
   State<LastScreenshotPanel> createState() => _LastScreenshotPanelState();
@@ -128,13 +135,16 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
   String _liveChannelName(String scriptName) =>
       'screenshot_live_${ApiClient().baseAddress}_$scriptName';
 
+  /// Effective collapse state; compact mode is always expanded.
+  bool get _isCollapsed => !widget.compact && _collapsed;
+
   @override
   void initState() {
     super.initState();
     _collapsed = _readCollapsed();
     // 布局变化导致的重建：先把上一帧捡回来，避免"空画面"闪一下（甚至一直空着）。
     _restoreCachedFrame();
-    if (!_collapsed) {
+    if (!_isCollapsed) {
       _connectLive();
     }
     _ageTicker = Timer.periodic(_ageTickInterval, (_) {
@@ -190,7 +200,7 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
   /// panel alive without rebuilding its parent, and it would otherwise stay on
   /// the previous host until the app restarted.
   void _ensureLiveChannel() {
-    if (_collapsed) {
+    if (_isCollapsed) {
       return;
     }
     final expected = _liveChannelName(widget.scriptName);
@@ -200,12 +210,12 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
     // Deferred: reconnecting mutates state, which build must not do.
     // 先 await 旧流的关闭，再连接：否则晚到的 close 会把新挂上的监听清掉。
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || _collapsed || _liveChannel == expected) {
+      if (!mounted || _isCollapsed || _liveChannel == expected) {
         return;
       }
       setState(_clearFrame);
       await _disconnectLive();
-      if (!mounted || _collapsed) {
+      if (!mounted || _isCollapsed) {
         return;
       }
       await _connectLive();
@@ -335,7 +345,7 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
   Future<void> _refresh() async {
     setState(_clearFrame);
     await _disconnectLive();
-    if (!_collapsed) {
+    if (!_isCollapsed) {
       await _connectLive();
     }
   }
@@ -349,6 +359,32 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
     final capturedAt = meta.capturedAt;
     if (!meta.exists || capturedAt == null) {
       // Also used when collapsed, where the preview cannot explain itself.
+      return I18n.lastScreenshotEmpty.tr;
+    }
+    final age = screenshotAgeOf(capturedAt);
+    final ageLabel = switch (age.unit) {
+      ScreenshotAgeUnit.justNow => I18n.lastScreenshotAgeJustNow.tr,
+      ScreenshotAgeUnit.minutes => I18n.lastScreenshotAgeMinutes.trParams({
+        'n': '${age.value}',
+      }),
+      ScreenshotAgeUnit.hours => I18n.lastScreenshotAgeHours.trParams({
+        'n': '${age.value}',
+      }),
+      ScreenshotAgeUnit.days => I18n.lastScreenshotAgeDays.trParams({
+        'n': '${age.value}',
+      }),
+    };
+    return '${formatScreenshotCapturedAt(capturedAt)} · $ageLabel';
+  }
+
+  /// Builds the full "captured at" line for non-compact mode.
+  String? _fullCapturedLabel() {
+    final meta = _meta;
+    if (meta == null) {
+      return null;
+    }
+    final capturedAt = meta.capturedAt;
+    if (!meta.exists || capturedAt == null) {
       return I18n.lastScreenshotEmpty.tr;
     }
     final age = screenshotAgeOf(capturedAt);
@@ -425,13 +461,85 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
   Widget build(BuildContext context) {
     _ensureLiveChannel();
     final theme = Theme.of(context);
-    final label = _capturedLabel();
+    final label = widget.compact ? _capturedLabel() : _fullCapturedLabel();
+    final scheme = theme.colorScheme;
+    if (widget.compact) {
+      return Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.photo_camera_outlined,
+                    size: 16,
+                    color: scheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    I18n.lastScreenshotTitle.tr,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (label != null) ...[
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.secondaryContainer.withValues(
+                            alpha: 0.65,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSecondaryContainer,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    tooltip: I18n.lastScreenshotRefresh.tr,
+                    onPressed: _refresh,
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Expanded(child: _preview(context)),
+            ],
+          ),
+        ),
+      );
+    }
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(widget.compact ? 10 : 12),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: widget.compact ? MainAxisSize.max : MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -455,17 +563,18 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
                   tooltip: I18n.lastScreenshotRefresh.tr,
                   onPressed: _refresh,
                 ),
-                _action(
-                  icon: _collapsed
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  tooltip:
-                      (_collapsed
-                              ? I18n.lastScreenshotExpand
-                              : I18n.lastScreenshotCollapse)
-                          .tr,
-                  onPressed: _toggleCollapsed,
-                ),
+                if (!widget.compact)
+                  _action(
+                    icon: _collapsed
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    tooltip:
+                        (_collapsed
+                                ? I18n.lastScreenshotExpand
+                                : I18n.lastScreenshotCollapse)
+                            .tr,
+                    onPressed: _toggleCollapsed,
+                  ),
               ],
             ),
             if (label != null) ...[
@@ -483,7 +592,13 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
                 ),
               ),
             ],
-            if (!_collapsed) ...[const SizedBox(height: 8), _preview(context)],
+            if (widget.compact) ...[
+              const SizedBox(height: 6),
+              Expanded(child: _preview(context)),
+            ] else if (!_collapsed) ...[
+              const SizedBox(height: 8),
+              _preview(context),
+            ],
           ],
         ),
       ),
@@ -508,6 +623,22 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final frame = _liveFrame;
+    final previewContent = frame == null
+        ? Center(
+            child: Text(
+              I18n.lastScreenshotEmpty.tr,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        : Image.memory(
+            frame,
+            fit: BoxFit.contain,
+            // Keeps the old frame visible while the next one decodes,
+            // so a 4fps stream does not flicker.
+            gaplessPlayback: true,
+          );
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: frame == null ? null : () => _openFullscreen(context, frame),
@@ -515,29 +646,19 @@ class _LastScreenshotPanelState extends State<LastScreenshotPanel> {
         borderRadius: BorderRadius.circular(8),
         child: Container(
           width: double.infinity,
+          height: widget.compact ? double.infinity : null,
           color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: _maxPreviewHeight),
-            child: AspectRatio(
-              aspectRatio: _aspectRatio ?? _fallbackAspectRatio,
-              child: frame == null
-                  ? Center(
-                      child: Text(
-                        I18n.lastScreenshotEmpty.tr,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  : Image.memory(
-                      frame,
-                      fit: BoxFit.contain,
-                      // Keeps the old frame visible while the next one decodes,
-                      // so a 4fps stream does not flicker.
-                      gaplessPlayback: true,
-                    ),
-            ),
-          ),
+          child: widget.compact
+              ? previewContent
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: _maxPreviewHeight,
+                  ),
+                  child: AspectRatio(
+                    aspectRatio: _aspectRatio ?? _fallbackAspectRatio,
+                    child: previewContent,
+                  ),
+                ),
         ),
       ),
     );
