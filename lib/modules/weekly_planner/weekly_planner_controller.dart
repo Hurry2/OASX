@@ -67,6 +67,7 @@ class WeeklyPlannerController extends GetxController {
       if (weeklyOnly && !t.isWeeklyMenu && t.weeklyDays.isEmpty) return false;
       if (day > 0 && !t.assignedDays.contains(day)) return false;
       if (kw.isNotEmpty &&
+          !t.displayTitle.toLowerCase().contains(kw) &&
           !t.title.toLowerCase().contains(kw) &&
           !t.task.toLowerCase().contains(kw)) {
         return false;

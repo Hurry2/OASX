@@ -218,7 +218,7 @@ class _WeeklyPlannerViewState extends State<WeeklyPlannerView> {
                   children: [
                     Flexible(
                       child: Text(
-                        task.title,
+                        task.displayTitle,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),

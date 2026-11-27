@@ -1,3 +1,5 @@
+import 'package:get/get.dart';
+
 /// Data models for the OAS weekly task planner and Mon-Sun summary strip.
 class WeeklyPlannerTask {
   WeeklyPlannerTask({
@@ -21,6 +23,15 @@ class WeeklyPlannerTask {
   final List<int> assignedDays;
   final String nextRun;
   final int priority;
+
+  /// Returns localized task name, falling back to OASX GetX translations.
+  String get displayTitle {
+    if (title.isNotEmpty && title != task) {
+      return title;
+    }
+    final translated = task.tr;
+    return translated.isNotEmpty ? translated : task;
+  }
 
   factory WeeklyPlannerTask.fromJson(Map<String, dynamic> json) {
     final rawAssigned = json['assigned_days'];

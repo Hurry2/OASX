@@ -296,7 +296,7 @@ class _TaskPreviewPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            task.title,
+            task.displayTitle,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
