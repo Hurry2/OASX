@@ -64,7 +64,12 @@ class WeeklyPlannerController extends GetxController {
     final day = filterDay.value;
     final weeklyOnly = onlyWeekly.value;
     return data.tasks.where((t) {
-      if (weeklyOnly && !t.isWeeklyMenu && t.weeklyDays.isEmpty) return false;
+      if (weeklyOnly &&
+          !t.isWeeklyMenu &&
+          t.weeklyDays.isEmpty &&
+          t.assignedDays.isEmpty) {
+        return false;
+      }
       if (day > 0 && !t.assignedDays.contains(day)) return false;
       if (kw.isNotEmpty &&
           !t.displayTitle.toLowerCase().contains(kw) &&

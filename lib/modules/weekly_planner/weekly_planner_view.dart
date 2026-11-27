@@ -253,7 +253,9 @@ class _WeeklyPlannerViewState extends State<WeeklyPlannerView> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        task.isWeeklyMenu ? '周常' : task.displayGroup,
+                        task.extraLabel.isNotEmpty
+                            ? task.extraLabel
+                            : (task.isWeeklyMenu ? '周常' : task.displayGroup),
                         style: TextStyle(
                           fontSize: 10,
                           color: task.isWeeklyMenu

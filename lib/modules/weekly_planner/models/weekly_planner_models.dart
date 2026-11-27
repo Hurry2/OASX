@@ -12,6 +12,7 @@ class WeeklyPlannerTask {
     required this.assignedDays,
     required this.nextRun,
     required this.priority,
+    this.extraLabel = '',
   });
 
   final String task;
@@ -23,6 +24,7 @@ class WeeklyPlannerTask {
   final List<int> assignedDays;
   final String nextRun;
   final int priority;
+  final String extraLabel;
 
   /// Returns localized task name, falling back to OASX GetX translations.
   String get displayTitle {
@@ -65,6 +67,7 @@ class WeeklyPlannerTask {
       assignedDays: assigned,
       nextRun: (json['next_run'] ?? '').toString(),
       priority: int.tryParse((json['priority'] ?? 5).toString()) ?? 5,
+      extraLabel: (json['extra_label'] ?? '').toString(),
     );
   }
 }

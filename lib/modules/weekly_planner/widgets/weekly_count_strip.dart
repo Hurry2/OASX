@@ -297,7 +297,9 @@ class _TaskPreviewPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            task.displayTitle,
+            task.extraLabel.isNotEmpty
+                ? '${task.displayTitle}·${task.extraLabel}'
+                : task.displayTitle,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
