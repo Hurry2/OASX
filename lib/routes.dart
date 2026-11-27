@@ -8,6 +8,7 @@ import 'package:oasx/modules/server/index.dart';
 import 'package:oasx/modules/settings/index.dart';
 import 'package:oasx/utils/platform_utils.dart';
 import 'package:oasx/modules/click_statistics/index.dart';
+import 'package:oasx/modules/weekly_planner/index.dart';
 
 class Routes {
   static const initial = '/home';
@@ -34,6 +35,11 @@ class Routes {
       name: '/click-statistics',
       page: () => ClickStatisticsView(),
       binding: ClickStatisticsBinding(),
+    ),
+    GetPage(
+      name: '/weekly-planner',
+      page: () => const WeeklyPlannerView(),
+      binding: WeeklyPlannerBinding(),
     ),
   ];
 

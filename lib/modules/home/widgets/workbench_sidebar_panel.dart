@@ -10,6 +10,7 @@ import 'package:oasx/modules/home/widgets/log_center_panel.dart';
 import 'package:oasx/modules/home/widgets/statistics_panel.dart';
 import 'package:oasx/modules/home/widgets/statistics_pie_card.dart';
 import 'package:oasx/modules/home/widgets/storage_stats_panel.dart';
+import 'package:oasx/modules/weekly_planner/widgets/weekly_count_strip.dart';
 import 'package:oasx/translation/i18n_content.dart';
 
 /// Hosts the desktop right sidebar for statistics, logs, monitoring and clicks.
@@ -33,13 +34,21 @@ class WorkbenchSidebarPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 600) {
-          return _buildBentoCockpit(context);
-        }
-        return _buildNarrowBento(context, constraints.maxWidth);
-      },
+    return Column(
+      children: [
+        WeeklyCountStrip(scriptName: scriptName),
+        const SizedBox(height: 4),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 600) {
+                return _buildBentoCockpit(context);
+              }
+              return _buildNarrowBento(context, constraints.maxWidth);
+            },
+          ),
+        ),
+      ],
     );
   }
 

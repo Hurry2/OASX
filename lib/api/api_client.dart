@@ -13,6 +13,7 @@ import 'package:oasx/modules/common/models/storage_key.dart';
 import 'package:oasx/modules/home/models/script_statistics_models.dart';
 import 'package:oasx/modules/home/models/storage_stats_models.dart';
 import 'package:oasx/modules/click_statistics/models/click_statistics_models.dart';
+import 'package:oasx/modules/weekly_planner/models/weekly_planner_models.dart';
 import 'package:oasx/modules/log/log_browser_models.dart';
 import 'package:oasx/modules/server/models/deploy_webui_config.dart';
 import 'package:oasx/translation/i18n.dart';
@@ -34,6 +35,7 @@ part 'api_client_storage_stats.dart';
 part 'api_client_screenshot.dart';
 part 'api_client_logs.dart';
 part 'api_client_click_statistics.dart';
+part 'api_client_weekly_planner.dart';
 
 class ApiResult<T> {
   ApiResult({this.data, this.error, this.code});
