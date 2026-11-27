@@ -142,6 +142,7 @@ class _WeeklyCountStripState extends State<WeeklyCountStrip> {
 
   Future<void> _openWeeklyPlannerDialog(BuildContext context, int initialDay) {
     _controller.filterDay.value = 0;
+    _controller.searchQuery.value = '';
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => Dialog(

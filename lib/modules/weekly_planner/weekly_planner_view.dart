@@ -18,6 +18,7 @@ class WeeklyPlannerView extends StatefulWidget {
 class _WeeklyPlannerViewState extends State<WeeklyPlannerView> {
   static const _dayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   static const _shortLabels = ['一', '二', '三', '四', '五', '六', '日'];
+  late final TextEditingController _searchController;
 
   WeeklyPlannerController get _controller {
     if (!Get.isRegistered<WeeklyPlannerController>()) {
@@ -29,11 +30,19 @@ class _WeeklyPlannerViewState extends State<WeeklyPlannerView> {
   @override
   void initState() {
     super.initState();
+    _controller.searchQuery.value = '';
+    _searchController = TextEditingController();
     final args = Get.arguments;
     final scriptName = args is Map ? (args['scriptName'] ?? '').toString() : '';
     if (scriptName.isNotEmpty) {
       unawaited(_controller.loadForConfig(scriptName, force: true));
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -166,11 +175,22 @@ class _WeeklyPlannerViewState extends State<WeeklyPlannerView> {
                   SizedBox(
                     width: 240,
                     child: TextField(
-                      decoration: const InputDecoration(
+                      controller: _searchController,
+                      decoration: InputDecoration(
                         isDense: true,
                         hintText: '搜索任务名...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        suffixIcon: _controller.searchQuery.value.isNotEmpty
+                            ? IconButton(
+                                tooltip: '清空',
+                                icon: const Icon(Icons.close, size: 16),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _controller.searchQuery.value = '';
+                                },
+                              )
+                            : null,
+                        border: const OutlineInputBorder(),
                       ),
                       onChanged: (v) => _controller.searchQuery.value = v,
                     ),
