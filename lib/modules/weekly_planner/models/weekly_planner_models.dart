@@ -33,6 +33,23 @@ class WeeklyPlannerTask {
     return translated.isNotEmpty ? translated : task;
   }
 
+  /// Returns localized group name for non-weekly categories.
+  String get displayGroup {
+    const fallback = {
+      'Soul Zones': '刷御魂',
+      'Daily Task': '日常任务',
+      'Liver Emperor Exclusive': '肝帝专属',
+      'Guild': '阴阳寮',
+      'Weekly Task': '每周任务',
+      'Activity Task': '活动任务',
+    };
+    final translated = group.tr;
+    if (translated.isNotEmpty && translated != group) {
+      return translated;
+    }
+    return fallback[group] ?? group;
+  }
+
   factory WeeklyPlannerTask.fromJson(Map<String, dynamic> json) {
     final rawAssigned = json['assigned_days'];
     final assigned = rawAssigned is List
